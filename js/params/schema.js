@@ -1,46 +1,9 @@
-/**
- * Tiling IR: the contract between generators and everything else.
- * Types only (JSDoc); see docs/ARCHITECTURE.md.
- *
- * @typedef {[number,number,number,number,number,number]} Affine   SVG-style matrix
- * @typedef {Array<['M'|'L', number, number]|['Z']>} Path          Currently M/L/Z only
- *
- * @typedef {Object} Edge
- * @property {string} id
- * @property {Path} path                       Local coords, traversed clockwise around the tile
- * @property {{edge:string, transform:Affine}} [pair]
- *           Partner edge, and the transform mapping this edge (as a point set) onto it.
- *
- * @typedef {Object} Prototile
- * @property {Edge[]} edges                    Consecutive edges form a closed outline
- * @property {[number,number]} center
- *
- * @typedef {Object} Tile
- * @property {string} proto                    Key into IR.prototiles
- * @property {Affine} transform                Local -> world
- * @property {{rot:number, flip:boolean}} orient  Discrete orientation (rot = quarter/sector index)
- * @property {Object} tags                     Generator-supplied info for colorings
- *
- * @typedef {Object} TilingIR
- * @property {Object<string,Prototile>} prototiles
- * @property {Tile[]} tiles
- * @property {{generator:string, params:Object, bounds:number[]}} meta
- *
- * @typedef {Object} ParamDef
- * @property {string} id
- * @property {string} label
- * @property {'number'|'select'|'color'|'boolean'} type
- * @property {*} default
- * @property {number} [min]
- * @property {number} [max]
- * @property {number} [step]
- * @property {Array<[string,string]>} [options]   [value,label] pairs for 'select'
- * @property {string} [group]
- *
- * @typedef {Object} Generator
- * @property {string} id
- * @property {string} name
- * @property {ParamDef[]} params
- * @property {(params:Object, region:[number,number,number,number]) => TilingIR} generate
- */
-export {};
+/** Param-schema helpers and app-level (non-generator) schemas. */
+export const defaults = (schema) => Object.fromEntries(schema.map((p) => [p.id, p.default]));
+
+export const viewParams = [
+  { id: 'width', label: 'Width (px)', type: 'number', default: 800, min: 100, max: 4000, step: 10, group: 'Canvas' },
+  { id: 'height', label: 'Height (px)', type: 'number', default: 600, min: 100, max: 4000, step: 10, group: 'Canvas' },
+  { id: 'flatten', label: 'Flatten (no <use>)', type: 'boolean', default: false, group: 'Export' },
+  { id: 'precision', label: 'Decimal places', type: 'number', default: 3, min: 0, max: 6, step: 1, group: 'Export' },
+];
