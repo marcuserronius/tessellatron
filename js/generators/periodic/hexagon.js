@@ -15,6 +15,11 @@ export const params = [
   orientParam,
 ];
 
+export const presets = [
+  { id: 'cycle-turns', name: 'Cycle turns along diagonals', params: { orientMode: 'cycle' }, style: { fillMode: 'orient' } },
+  { id: 'row-turns', name: 'Turn per row', params: { orientMode: 'rows' }, style: { fillMode: 'orient' } },
+];
+
 const K = Math.sqrt(3);
 const mod = (a, n) => ((a % n) + n) % n;
 const rad = (d) => (d * Math.PI) / 180;

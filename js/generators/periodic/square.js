@@ -19,6 +19,12 @@ export const params = [
               ['rows', 'Rotate per row'], ['cycle', 'Rotate along diagonals']] },
 ];
 
+export const presets = [
+  { id: 'brick', name: 'Brick bond', params: { rowShift: 0.5 } },
+  { id: 'checker-turns', name: 'Checkerboard quarter-turns', params: { orientMode: 'checker' }, style: { fillMode: 'orient' } },
+  { id: 'pinwheel', name: 'Diagonal pinwheel', params: { orientMode: 'cycle' }, style: { fillMode: 'orient' } },
+];
+
 const mod = (a, n) => ((a % n) + n) % n;
 const orientIndex = { none: () => 0, checker: (i, j) => mod(i + j, 2), rows: (i, j) => mod(j, 4), cycle: (i, j) => mod(i + j, 4) };
 

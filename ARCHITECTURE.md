@@ -33,6 +33,7 @@ A tiling is **prototiles + placements**, never a bag of polygons.
 
 - `pair` (edge gluing info) may be empty at first; reserve the slot for the shape editor.
 - `orient` lets the editor know which edge maps to which after rotation or reflection.
+- Mixed-prototile tilings (the Archimedean family) omit `pair`: their edges are shared between different prototiles, which same-prototile pairing cannot express yet. There `orient.rot` is an orientation-class index and the exact angle lives in `transform`.
 
 ## Rotation
 
@@ -73,7 +74,7 @@ js/
     registry.js
     periodic/            square.js triangle.js hexagon.js archimedean.js
     aperiodic/           (future) penrose.js hat.js
-  params/                schema.js defaults.js serialize.js
+  params/                schema.js presets.js serialize.js
   style/                 colorings.js strokes.js
   policies/              orientation.js
   render/                svg.js defs-use.js flatten.js
@@ -81,7 +82,7 @@ js/
   app/                   store.js events.js router.js
   ui/                    panels.js controls.js canvas.js export.js
 tests/                   Node-runnable tests
-docs/                    ARCHITECTURE.md + per-module contracts
+docs/                    (future) per-module contracts; ARCHITECTURE.md stays at the repo root
 ```
 
 ## Rules
@@ -100,6 +101,8 @@ docs/                    ARCHITECTURE.md + per-module contracts
 
 **Parameters**
 - Each generator declares its settings as a schema (type, range, default, label, group).
+- Presets: a generator may export `presets` (`{ id, name, params?, style? }`). Applying one resets params to defaults, layers the preset's params on top, and layers its style over the current style (`params/presets.js`).
+- Project files: JSON `{ format: "tessellatron-project", version: 1, generator, params, style, view }` (`params/serialize.js`). Loading validates every value against the schemas (clamps numbers, falls back to defaults, drops unknown keys) and rejects files with a wrong format, newer version or unknown generator.
 - UI controls, presets, validation, and URL-hash sharing are all derived from the schema. Never hand-write per-generator controls.
 
 **Rendering**

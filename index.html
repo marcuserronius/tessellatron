@@ -10,12 +10,16 @@
   <aside id="sidebar">
     <h1>Tessellatron</h1>
     <label class="field">Generator <select id="generator"></select></label>
+    <label class="field">Preset <select id="preset"></select></label>
     <div id="controls-gen"></div>
     <div id="controls-style"></div>
     <div id="controls-view"></div>
     <div class="buttons">
       <button id="download">Download SVG</button>
       <button id="copy">Copy SVG</button>
+      <button id="save">Save project</button>
+      <button id="load">Load project</button>
+      <input id="load-file" type="file" accept=".json,application/json" hidden>
     </div>
   </aside>
   <main id="preview"></main>

@@ -1,6 +1,6 @@
 /**
  * Tiling IR: the contract between generators and everything else.
- * Types only (JSDoc); see docs/ARCHITECTURE.md.
+ * Types only (JSDoc); see ARCHITECTURE.md.
  *
  * @typedef {[number,number,number,number,number,number]} Affine   SVG-style matrix
  * @typedef {Array<['M'|'L', number, number]|['Z']>} Path          Currently M/L/Z only
@@ -14,12 +14,14 @@
  * @typedef {Object} Prototile
  * @property {Edge[]} edges                    Consecutive edges form a closed outline
  * @property {[number,number]} center
- * @property {number} rotUnits                 Steps per full turn used by Tile.orient.rot (square 4, triangle/hexagon 6)
+ * @property {number} rotUnits                 Steps per full turn used by Tile.orient.rot (square 4, triangle/hexagon 6;
+ *           Archimedean prototiles: n, as rot is a class index there)
  *
  * @typedef {Object} Tile
  * @property {string} proto                    Key into IR.prototiles
  * @property {Affine} transform                Local -> world
- * @property {{rot:number, flip:boolean}} orient  Discrete orientation (rot = quarter/sector index)
+ * @property {{rot:number, flip:boolean}} orient  Discrete orientation (rot = quarter/sector index; in the
+ *           Archimedean tilings an orientation-class index per prototile, exact angle in `transform`)
  * @property {Object} tags                     Generator-supplied info for colorings
  *
  * @typedef {Object} TilingIR
@@ -38,10 +40,17 @@
  * @property {Array<[string,string]>} [options]   [value,label] pairs for 'select'
  * @property {string} [group]
  *
+ * @typedef {Object} Preset
+ * @property {string} id
+ * @property {string} name
+ * @property {Object} [params]                 Partial generator params, applied over the generator's defaults
+ * @property {Object} [style]                  Partial style, applied over the current style
+ *
  * @typedef {Object} Generator
  * @property {string} id
  * @property {string} name
  * @property {ParamDef[]} params
+ * @property {Preset[]} [presets]
  * @property {(params:Object, region:[number,number,number,number]) => TilingIR} generate
  */
 export {};

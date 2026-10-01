@@ -9,5 +9,5 @@ fieldset { margin: var(--gap) 0; border: 1px solid #8884; border-radius: 4px; }
 legend { font-weight: 600; }
 .field { display: flex; justify-content: space-between; align-items: center; gap: var(--gap); margin: 4px 0; }
 .field input[type=number] { width: 80px; }
-.buttons { display: flex; gap: var(--gap); margin-top: var(--gap); }
+.buttons { display: flex; flex-wrap: wrap; gap: var(--gap); margin-top: var(--gap); }
 button { padding: 6px 10px; cursor: pointer; }
