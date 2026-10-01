@@ -26,7 +26,7 @@ function prototile(s) {
   const h = s / 2, P = [[-h, -h], [h, -h], [h, h], [-h, h]]; // clockwise on screen (y down)
   const partner = [[2, [0, s]], [3, [-s, 0]], [0, [0, -s]], [1, [s, 0]]]; // top<->bottom, right<->left
   return {
-    center: [0, 0],
+    center: [0, 0], rotUnits: 4,
     edges: P.map((a, n) => ({
       id: `e${n}`,
       path: [['M', ...a], ['L', ...P[(n + 1) % 4]]],

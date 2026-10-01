@@ -14,6 +14,7 @@
  * @typedef {Object} Prototile
  * @property {Edge[]} edges                    Consecutive edges form a closed outline
  * @property {[number,number]} center
+ * @property {number} rotUnits                 Steps per full turn used by Tile.orient.rot (square 4, triangle/hexagon 6)
  *
  * @typedef {Object} Tile
  * @property {string} proto                    Key into IR.prototiles
