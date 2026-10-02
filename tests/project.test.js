@@ -10,7 +10,7 @@ import { get, list } from '../js/generators/registry.js';
 const schemas = { generator: get, style: styleParams, view: viewParams };
 const stateFor = (g) => ({ generator: g.id, params: defaults(g.params), style: defaults(styleParams), view: defaults(viewParams) });
 
-test('registry lists the 3 regular and 8 Archimedean tilings', () => assert.equal(list().length, 11));
+test('registry lists the 3 regular, 8 Archimedean and the Penrose generators', () => assert.equal(list().length, 12));
 
 test('every generator round-trips through save/load unchanged', () => {
   for (const g of list()) {

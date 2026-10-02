@@ -68,12 +68,12 @@ index.html               single entry point (SPA, in-page views)
 css/                     tokens.css, layout.css, panels.css
 js/
   main.js
-  core/                  vec.js affine.js polygon.js path.js bbox.js
+  core/                  vec.js affine.js polygon.js path.js bbox.js ring.js
   ir/                    schema.js validate.js helpers.js
   generators/
     registry.js
     periodic/            square.js triangle.js hexagon.js archimedean.js
-    aperiodic/           (future) penrose.js hat.js
+    aperiodic/           penrose.js robinson.js tilesets.js p1.js; (future) hat.js
   params/                schema.js presets.js serialize.js
   style/                 colorings.js strokes.js
   policies/              orientation.js
@@ -98,7 +98,8 @@ docs/                    (future) per-module contracts; ARCHITECTURE.md stays at
 - Signature: `generate(params, region) → IR`. `region` is the visible world-space bbox; emit only intersecting tiles.
 - Periodic generators are built from **lattice + motif** (basis vectors + tiles in the fundamental cell). This extends to all 17 wallpaper groups and covers the squares (two rows per cell, so row shift is a pure lattice), triangles, hexagons and the Archimedean tilings. `latticeTiles` takes `rotation` (about the world origin) and `origin` (a world-space shift applied after rotating); `originParams` are the matching Offset X/Y params.
 - Orientation policies (`policies/orientation.js`): `applyOrientation` adds discrete symmetric turns (geometry unchanged, edge labels move); `applyTwist` adds a continuous per-row/column/diagonal rotation about the tile centre or first vertex (geometry changes, so tiles stop fitting). Twist lives in `transform` only; `orient.rot` is untouched.
-- Aperiodic generators (later): use exact integer arithmetic in a number ring (e.g. ℤ[φ]) to avoid float drift at deep inflation levels.
+- Aperiodic generators use exact integer arithmetic in a number ring to avoid float drift at deep inflation levels (`core/ring.js`: ℤ[ζ₅], which contains φ and every 36° rotation). Floats appear only when converting to world coordinates.
+- Penrose (`generators/aperiodic/`): one exact Robinson-triangle patch (`robinson.js`), regrouped per `tileSet`: P3 rhombs and P2 kites/darts in `tilesets.js`, P1 pentagons plus gap tiles in `p1.js`. The patch is pruned to the region plus a margin, and its depth is derived from the region but restricted to odd values with a seed turn (`canonicalDepth`), so the tiling is identical at any zoom or region (tested). Prototiles are mirror-symmetric, so `orient.flip` stays false; `orient.rot` is the axis direction in 36° steps (rotUnits 10).
 - Each generator ships with presets and at least one Node test (tile count in a region; no gaps or overlaps for periodic ones).
 
 **Parameters**
@@ -128,7 +129,7 @@ docs/                    (future) per-module contracts; ARCHITECTURE.md stays at
 3. **Triangle and hexagon** via lattice + motif; orientation policies.
 4. **Remaining Archimedean tilings**, presets, flatten export, project save/load (JSON).
 5. **Edge pairing + shape editor prototype** (start with square tiles, translation-paired edges).
-6. **Aperiodic**: substitution framework, then Penrose, then others.
+6. **Aperiodic**: substitution framework and Penrose P1/P2/P3 (done); then hat/spectre and others.
 
 ## Working with Claude on this codebase
 

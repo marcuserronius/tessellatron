@@ -31,7 +31,7 @@ export function colorFor(tile, st, view) {
   switch (st.fillMode) {
     case 'uniform': return st.fill1;
     case 'classes': return [st.fill1, st.fill2, st.fill3][classOf(tile)];
-    case 'orient': return `hsl(${tile.orient.rot * 60},55%,70%)`;
+    case 'orient': return `hsl(${tile.orient.rot * (tile.tags.hueStep ?? 60)},55%,70%)`;
     case 'gradient': return gradient(tile, st, view);
     default: return 'none';
   }
