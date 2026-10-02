@@ -6,8 +6,8 @@
  * Tags: cls = 0 (up) / 1 (down).
  */
 import { rotate } from '../../core/affine.js';
-import { latticeTiles } from './lattice.js';
-import { orientParam, applyOrientation } from '../../policies/orientation.js';
+import { latticeTiles, originParams } from './lattice.js';
+import { orientParam, applyOrientation, twistParams, applyTwist } from '../../policies/orientation.js';
 
 export const id = 'triangle';
 export const name = 'Triangle';
@@ -15,6 +15,8 @@ export const params = [
   { id: 'size', label: 'Side length', type: 'number', default: 60, min: 5, max: 400, step: 1, group: 'Tiling' },
   { id: 'rotation', label: 'Tiling rotation (°)', type: 'number', default: 0, min: -180, max: 180, step: 1, group: 'Tiling' },
   orientParam,
+  ...originParams,
+  ...twistParams,
 ];
 
 export const presets = [
@@ -46,11 +48,12 @@ export function generate(p, region) {
       { proto: 'tri', offset: [s / 2, h / 3], angle: 180, rot: 3, tags: { cls: 1 } },
       { proto: 'tri', offset: [s, (2 * h) / 3], angle: 0, rot: 0, tags: { cls: 0 } },
     ],
-    rotation: p.rotation, region, radius: s / K,
+    rotation: p.rotation, origin: [p.originX, p.originY], region, radius: s / K,
   });
+  const prototiles = { tri: prototile(s) };
   return {
-    prototiles: { tri: prototile(s) },
-    tiles: applyOrientation(tiles, p.orientMode, { order: 3, rotUnits: 6 }),
+    prototiles,
+    tiles: applyTwist(applyOrientation(tiles, p.orientMode, { order: 3, rotUnits: 6 }), p, prototiles),
     meta: { generator: id, params: p, bounds: region },
   };
 }

@@ -4,8 +4,8 @@
  * Tags: cls = (i - j) mod 3, a proper 3-colouring.
  */
 import { translate } from '../../core/affine.js';
-import { latticeTiles } from './lattice.js';
-import { orientParam, applyOrientation } from '../../policies/orientation.js';
+import { latticeTiles, originParams } from './lattice.js';
+import { orientParam, applyOrientation, twistParams, applyTwist } from '../../policies/orientation.js';
 
 export const id = 'hexagon';
 export const name = 'Hexagon';
@@ -13,6 +13,8 @@ export const params = [
   { id: 'size', label: 'Side length', type: 'number', default: 40, min: 5, max: 300, step: 1, group: 'Tiling' },
   { id: 'rotation', label: 'Tiling rotation (°)', type: 'number', default: 0, min: -180, max: 180, step: 1, group: 'Tiling' },
   orientParam,
+  ...originParams,
+  ...twistParams,
 ];
 
 export const presets = [
@@ -43,11 +45,12 @@ export function generate(p, region) {
   const tiles = latticeTiles({
     basis: [[K * s, 0], [(K * s) / 2, 1.5 * s]],
     motif: [{ proto: 'hex', offset: [0, 0], angle: 0, rot: 0 }],
-    rotation: p.rotation, region, radius: s,
+    rotation: p.rotation, origin: [p.originX, p.originY], region, radius: s,
   }).map((t) => ({ ...t, tags: { ...t.tags, cls: mod(t.tags.i - t.tags.j, 3) } }));
+  const prototiles = { hex: prototile(s) };
   return {
-    prototiles: { hex: prototile(s) },
-    tiles: applyOrientation(tiles, p.orientMode, { order: 6, rotUnits: 6 }),
+    prototiles,
+    tiles: applyTwist(applyOrientation(tiles, p.orientMode, { order: 6, rotUnits: 6 }), p, prototiles),
     meta: { generator: id, params: p, bounds: region },
   };
 }

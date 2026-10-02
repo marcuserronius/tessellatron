@@ -7,14 +7,22 @@
  *           { proto, offset:[x,y], angle:deg, rot:int, tags? }
  *           `offset` is the tile CENTRE relative to the cell origin; `rot` -> orient.rot.
  *  - rotation: whole-tiling rotation (deg) about the world origin.
+ *  - origin [ox,oy]: world-space shift of the whole (already rotated) lattice; default [0,0].
  *  - region [x0,y0,x1,y1] and radius (prototile circumradius) bound what is emitted.
  * Tile centre = R * (i*a + j*b + offset); transform = translate(centre) * rotate(rotation+angle).
  * Prototiles must be centred on their local origin. tags always include {i, j, m (motif index)}.
  */
 import { multiply, translate, rotate, apply, invert } from '../../core/affine.js';
 
-export function latticeTiles({ basis: [[ax, ay], [bx, by]], motif, rotation = 0, region, radius }) {
-  const [x0, y0, x1, y1] = region;
+/** Shared params for generators that pass `origin` to latticeTiles. */
+export const originParams = [
+  { id: 'originX', label: 'Offset X', type: 'number', default: 0, min: -1000, max: 1000, step: 1, group: 'Tiling' },
+  { id: 'originY', label: 'Offset Y', type: 'number', default: 0, min: -1000, max: 1000, step: 1, group: 'Tiling' },
+];
+
+export function latticeTiles({ basis: [[ax, ay], [bx, by]], motif, rotation = 0, origin = [0, 0], region, radius }) {
+  const [ox, oy] = origin;
+  const [x0, y0, x1, y1] = [region[0] - ox, region[1] - oy, region[2] - ox, region[3] - oy]; // enumerate in the lattice's own frame
   const R = rotate(rotation), inv = invert(R), Binv = invert([ax, ay, bx, by, 0, 0]);
   const pad = radius + Math.max(...motif.map((m) => Math.hypot(...m.offset)));
   const ij = [[x0 - pad, y0 - pad], [x1 + pad, y0 - pad], [x1 + pad, y1 + pad], [x0 - pad, y1 + pad]]
@@ -28,7 +36,7 @@ export function latticeTiles({ basis: [[ax, ay], [bx, by]], motif, rotation = 0,
         if (cx < x0 - radius || cx > x1 + radius || cy < y0 - radius || cy > y1 + radius) return;
         tiles.push({
           proto: m.proto,
-          transform: multiply(translate(cx, cy), rotate(rotation + m.angle)),
+          transform: multiply(translate(cx + ox, cy + oy), rotate(rotation + m.angle)),
           orient: { rot: m.rot, flip: false },
           tags: { i, j, m: k, ...m.tags },
         });

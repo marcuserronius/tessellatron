@@ -79,8 +79,9 @@ js/
   policies/              orientation.js
   render/                svg.js defs-use.js flatten.js
   editor/                (future)
-  app/                   store.js events.js router.js
+  app/                   store.js (with undo/redo) events.js router.js
   ui/                    panels.js controls.js canvas.js export.js
+scripts/                 bundle.js (standalone HTML build)
 tests/                   Node-runnable tests
 docs/                    (future) per-module contracts; ARCHITECTURE.md stays at the repo root
 ```
@@ -95,7 +96,8 @@ docs/                    (future) per-module contracts; ARCHITECTURE.md stays at
 
 **Generators**
 - Signature: `generate(params, region) → IR`. `region` is the visible world-space bbox; emit only intersecting tiles.
-- Periodic generators are built from **lattice + motif** (basis vectors + tiles in the fundamental cell). This extends to all 17 wallpaper groups and covers the Archimedean tilings.
+- Periodic generators are built from **lattice + motif** (basis vectors + tiles in the fundamental cell). This extends to all 17 wallpaper groups and covers the squares (two rows per cell, so row shift is a pure lattice), triangles, hexagons and the Archimedean tilings. `latticeTiles` takes `rotation` (about the world origin) and `origin` (a world-space shift applied after rotating); `originParams` are the matching Offset X/Y params.
+- Orientation policies (`policies/orientation.js`): `applyOrientation` adds discrete symmetric turns (geometry unchanged, edge labels move); `applyTwist` adds a continuous per-row/column/diagonal rotation about the tile centre or first vertex (geometry changes, so tiles stop fitting). Twist lives in `transform` only; `orient.rot` is untouched.
 - Aperiodic generators (later): use exact integer arithmetic in a number ring (e.g. ℤ[φ]) to avoid float drift at deep inflation levels.
 - Each generator ships with presets and at least one Node test (tile count in a region; no gaps or overlaps for periodic ones).
 
@@ -103,6 +105,7 @@ docs/                    (future) per-module contracts; ARCHITECTURE.md stays at
 - Each generator declares its settings as a schema (type, range, default, label, group).
 - Presets: a generator may export `presets` (`{ id, name, params?, style? }`). Applying one resets params to defaults, layers the preset's params on top, and layers its style over the current style (`params/presets.js`).
 - Project files: JSON `{ format: "tessellatron-project", version: 1, generator, params, style, view }` (`params/serialize.js`). Loading validates every value against the schemas (clamps numbers, falls back to defaults, drops unknown keys) and rejects files with a wrong format, newer version or unknown generator.
+- URL-hash sharing (`toHash`/`fromHash` in `params/serialize.js`): `#g=<generator>&p.<id>=…&s.<id>=…&v.<id>=…`, non-default values only, validated like a project file.
 - UI controls, presets, validation, and URL-hash sharing are all derived from the schema. Never hand-write per-generator controls.
 
 **Rendering**
@@ -111,12 +114,12 @@ docs/                    (future) per-module contracts; ARCHITECTURE.md stays at
 - Exported SVG is standalone: `viewBox`, no scripts, no external dependencies. Precision and units configurable.
 
 **State and UI**
-- One state object (params, style, viewport) behind a small store with change events. This gives presets, undo/redo, and sharing nearly for free.
+- One state object (params, style, viewport) behind a small store with change events. This gives presets, undo/redo, and sharing nearly for free. The store keeps the undo history: edits within 400 ms of each other merge into one step, and `set(patch, { step: true })` forces a new step (generator change, preset, load).
 - Debounced full regeneration on change; optimize only if needed.
 - Single `index.html` with in-page views (Generate, Shape, Export, Presets). Do not split into separate pages.
 
 **Build**
-- Native ES modules, no build step. Browsers block modules on `file://`, so run a local server (`python -m http.server`). A bundler script that emits one standalone HTML file can come later.
+- Native ES modules, no build step. Browsers block modules on `file://`, so run a local server (`python -m http.server`). `npm run bundle` (`scripts/bundle.js`, no dependencies) writes `dist/tessellatron.html`: one standalone file with the CSS and all modules inlined, which does work from `file://`. It supports only the import/export forms the app uses and fails the build on anything else (default exports, bare specifiers, circular imports).
 
 ## Roadmap
 

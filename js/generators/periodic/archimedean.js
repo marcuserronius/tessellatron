@@ -13,7 +13,7 @@
  *    same-prototile pairing of the IR cannot express (see TODO.md, Editor).
  * Chiral tilings (snubs) take a `mirror` param that reflects the whole tiling.
  */
-import { latticeTiles } from './lattice.js';
+import { latticeTiles, originParams } from './lattice.js';
 import { ngon, circumradius, centroid, signedArea } from '../../core/polygon.js';
 
 const K = Math.sqrt(3);
@@ -113,6 +113,7 @@ export function makeGenerator(spec) {
     { id: 'size', label: 'Side length', type: 'number', default: 36, min: 5, max: 200, step: 1, group: 'Tiling' },
     { id: 'rotation', label: 'Tiling rotation (°)', type: 'number', default: 0, min: -180, max: 180, step: 1, group: 'Tiling' },
     ...(spec.chiral ? [{ id: 'mirror', label: 'Mirror image', type: 'boolean', default: false, group: 'Tiling' }] : []),
+    ...originParams,
   ];
   const presets = spec.chiral ? [...common, { id: 'mirror', name: 'Mirror image', params: { mirror: true } }] : common;
 
@@ -122,7 +123,7 @@ export function makeGenerator(spec) {
     const { motif, ns } = motifOf(polys.map((P) => P.map(f)), s);
     const tiles = latticeTiles({
       basis: basis.map((v) => f(v).map((x) => x * s)), motif,
-      rotation: p.rotation, region, radius: circumradius(ns[ns.length - 1], s),
+      rotation: p.rotation, origin: [p.originX, p.originY], region, radius: circumradius(ns[ns.length - 1], s),
     });
     return {
       prototiles: Object.fromEntries(ns.map((n) => [`n${n}`, prototile(n, s)])),

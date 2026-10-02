@@ -6,6 +6,8 @@
  *
  * sanitize(schema, values)            -> { values, warnings }
  * serializeProject(state)             -> JSON string
+ * toHash(state, schemas)             -> "g=square&p.size=80&s.fill1=%23ff0000" (only non-default values)
+ * fromHash(hash, schemas)             -> { state, warnings } (same validation as parseProject)
  * parseProject(text, { generator, style, view })
  *    generator: id -> Generator | undefined;  style, view: param schemas.
  *    -> { state, warnings }; throws Error with a readable message if the file is unusable.
@@ -60,4 +62,35 @@ export function parseProject(text, schemas) {
     state: { generator: gen.id, params: section('params', gen.params), style: section('style', schemas.style), view: section('view', schemas.view) },
     warnings,
   };
+}
+
+const SECTIONS = [['p', 'params'], ['s', 'style'], ['v', 'view']];
+const sectionSchemas = (gen, schemas) => ({ params: gen.params, style: schemas.style, view: schemas.view });
+
+export function toHash(state, schemas) {
+  const q = new URLSearchParams({ g: state.generator });
+  const all = sectionSchemas(schemas.generator(state.generator), schemas);
+  for (const [key, name] of SECTIONS) {
+    const def = defaults(all[name]);
+    for (const p of all[name]) {
+      const v = state[name][p.id];
+      if (v !== def[p.id]) q.set(`${key}.${p.id}`, typeof v === 'boolean' ? (v ? '1' : '0') : String(v));
+    }
+  }
+  return q.toString();
+}
+
+export function fromHash(hash, schemas) {
+  const q = new URLSearchParams(hash.replace(/^#/, ''));
+  const gen = schemas.generator(q.get('g'));
+  if (!gen) throw new Error(`Unknown generator: ${q.get('g')}.`);
+  const all = sectionSchemas(gen, schemas);
+  const doc = { format: FORMAT, version: VERSION, generator: gen.id, params: {}, style: {}, view: {} };
+  for (const [key, name] of SECTIONS) for (const p of all[name]) {
+    const raw = q.get(`${key}.${p.id}`);
+    if (raw === null) continue;
+    doc[name][p.id] = p.type === 'number' ? (raw.trim() === '' ? NaN : Number(raw))
+      : p.type === 'boolean' ? (raw === '1' ? true : raw === '0' ? false : raw) : raw;
+  }
+  return parseProject(JSON.stringify(doc), schemas); // NaN -> null -> rejected -> default, like any bad value
 }

@@ -1,12 +1,16 @@
 /**
- * Square tiling generator.
+ * Square tiling generator (lattice + motif, like the other periodic generators).
  * Contract: generate(params, region) -> TilingIR (see ir/schema.js).
  *  - region = [x0,y0,x1,y1] in world coords; emits tiles whose bounding circle touches it.
- *  - Prototile "sq" is a size x size square centred on the local origin, so each tile's
- *    transform is just translate(center) * rotate(angle). Rotation index k lives in orient.rot.
- *  - Lattice is anchored at the world origin and rotated about it by `rotation`.
+ *  - Prototile "sq" is a size x size square centred on the local origin.
+ *  - One cell is two rows (basis [s,0] x [0,2s]) so alternate rows can shift by rowShift*size:
+ *    the motif has a tile at (0,0) and one at (rowShift*s, s). Tags i, j are the column and the
+ *    absolute ROW index (j = 2*cellRow + motifIndex), which is what the orientation policy expects.
+ *  - Lattice is anchored at the world origin (plus `origin`) and rotated about it by `rotation`.
  */
-import { multiply, translate, rotate, apply, invert } from '../../core/affine.js';
+import { translate } from '../../core/affine.js';
+import { latticeTiles, originParams } from './lattice.js';
+import { orientParam, applyOrientation, twistParams, applyTwist } from '../../policies/orientation.js';
 
 export const id = 'square';
 export const name = 'Square';
@@ -14,9 +18,10 @@ export const params = [
   { id: 'size', label: 'Tile size', type: 'number', default: 60, min: 5, max: 400, step: 1, group: 'Tiling' },
   { id: 'rotation', label: 'Tiling rotation (°)', type: 'number', default: 0, min: -180, max: 180, step: 1, group: 'Tiling' },
   { id: 'rowShift', label: 'Row shift (× size)', type: 'number', default: 0, min: 0, max: 1, step: 0.05, group: 'Tiling' },
-  { id: 'orientMode', label: 'Tile orientation', type: 'select', default: 'none', group: 'Tiling',
-    options: [['none', 'All the same'], ['checker', 'Checkerboard quarter-turn'],
-              ['rows', 'Rotate per row'], ['cycle', 'Rotate along diagonals']] },
+  { ...orientParam, options: [['none', 'All the same'], ['checker', 'Checkerboard quarter-turn'],
+                              ['rows', 'Rotate per row'], ['cycle', 'Rotate along diagonals']] },
+  ...originParams,
+  ...twistParams,
 ];
 
 export const presets = [
@@ -24,9 +29,6 @@ export const presets = [
   { id: 'checker-turns', name: 'Checkerboard quarter-turns', params: { orientMode: 'checker' }, style: { fillMode: 'orient' } },
   { id: 'pinwheel', name: 'Diagonal pinwheel', params: { orientMode: 'cycle' }, style: { fillMode: 'orient' } },
 ];
-
-const mod = (a, n) => ((a % n) + n) % n;
-const orientIndex = { none: () => 0, checker: (i, j) => mod(i + j, 2), rows: (i, j) => mod(j, 4), cycle: (i, j) => mod(i + j, 4) };
 
 function prototile(s) {
   const h = s / 2, P = [[-h, -h], [h, -h], [h, h], [-h, h]]; // clockwise on screen (y down)
@@ -42,28 +44,16 @@ function prototile(s) {
 }
 
 export function generate(p, region) {
-  const { size: s, rotation, rowShift, orientMode } = p;
-  const margin = (s / 2) * Math.SQRT2;
-  const [x0, y0, x1, y1] = region;
-  const inv = invert(rotate(rotation));
-  const local = [[x0, y0], [x1, y0], [x1, y1], [x0, y1]].map((q) => apply(inv, q));
-  const xs = local.map((q) => q[0]), ys = local.map((q) => q[1]);
-  const lo = (v) => Math.floor((v - margin) / s) - 1, hi = (v) => Math.ceil((v + margin) / s) + 1;
-  const R = rotate(rotation), tiles = [], k = orientIndex[orientMode] ?? orientIndex.none;
-
-  for (let j = lo(Math.min(...ys)); j <= hi(Math.max(...ys)); j++) {
-    const shift = mod(j, 2) * rowShift * s;
-    for (let i = lo(Math.min(...xs)) - 1; i <= hi(Math.max(...xs)) + 1; i++) {
-      const [cx, cy] = apply(R, [i * s + shift, j * s]);
-      if (cx < x0 - margin || cx > x1 + margin || cy < y0 - margin || cy > y1 + margin) continue;
-      const rot = k(i, j);
-      tiles.push({
-        proto: 'sq',
-        transform: multiply(translate(cx, cy), rotate(rotation + rot * 90)),
-        orient: { rot, flip: false },
-        tags: { i, j },
-      });
-    }
-  }
-  return { prototiles: { sq: prototile(s) }, tiles, meta: { generator: id, params: p, bounds: region } };
+  const s = p.size;
+  const tiles = latticeTiles({
+    basis: [[s, 0], [0, 2 * s]],
+    motif: [{ proto: 'sq', offset: [0, 0], angle: 0, rot: 0 }, { proto: 'sq', offset: [p.rowShift * s, s], angle: 0, rot: 0 }],
+    rotation: p.rotation, origin: [p.originX, p.originY], region, radius: s * Math.SQRT1_2,
+  }).map((t) => ({ ...t, tags: { ...t.tags, j: 2 * t.tags.j + t.tags.m } }));
+  const prototiles = { sq: prototile(s) };
+  return {
+    prototiles,
+    tiles: applyTwist(applyOrientation(tiles, p.orientMode, { order: 4, rotUnits: 4 }), p, prototiles),
+    meta: { generator: id, params: p, bounds: region },
+  };
 }

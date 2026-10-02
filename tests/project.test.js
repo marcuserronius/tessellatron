@@ -66,3 +66,37 @@ test('every shipped preset only references real params and valid values', () => 
     for (const k of Object.keys(p.params ?? {})) assert.ok(g.params.some((q) => q.id === k), `${g.id}/${p.id}: unknown param ${k}`);
   }
 });
+
+import { toHash, fromHash } from '../js/params/serialize.js';
+
+const nonDefaultState = (g) => {
+  const flip = (schema) => Object.fromEntries(schema.map((p) => [p.id,
+    p.type === 'boolean' ? !p.default : p.type === 'select' ? p.options.at(-1)[0] : p.type === 'color' ? '#0a0b0c'
+      : p.type === 'number' ? Math.min(p.max, Math.max(p.min, p.default + p.step * 3)) : p.default]));
+  return { generator: g.id, params: flip(g.params), style: flip(styleParams), view: flip(viewParams) };
+};
+
+test('URL hash: defaults encode to just the generator', () => {
+  assert.equal(toHash(stateFor(get('square')), schemas), 'g=square');
+});
+
+test('URL hash: only non-default values are written; every generator round-trips', () => {
+  for (const g of list()) {
+    const state = nonDefaultState(g), h = toHash(state, schemas);
+    assert.ok(h.startsWith(`g=${g.id}&`));
+    const { state: back, warnings } = fromHash(`#${h}`, schemas);
+    assert.deepEqual(back, state, g.id);
+    assert.deepEqual(warnings, []);
+  }
+});
+
+test('URL hash: bad values fall back to defaults with warnings; unknown generator throws', () => {
+  const { state, warnings } = fromHash('g=square&p.size=abc&p.rowShift=9&s.fill1=red&v.flatten=maybe&p.nope=1', schemas);
+  assert.equal(state.params.size, defaults(get('square').params).size);
+  assert.equal(state.params.rowShift, 1);
+  assert.equal(state.style.fill1, defaults(styleParams).fill1);
+  assert.equal(state.view.flatten, false);
+  assert.equal(warnings.length, 4);
+  assert.throws(() => fromHash('g=nope', schemas), /Unknown generator/);
+  assert.throws(() => fromHash('', schemas), /Unknown generator/);
+});
