@@ -4,13 +4,16 @@ Unimplemented items and known gaps. Milestone numbers refer to `ARCHITECTURE.md`
 
 ## Generators
 - [ ] Wallpaper-group (p1…p6m) motif presets built on `lattice.js`.
-- [ ] Aperiodic generators (milestone 6): hat/spectre, cut-and-project, Truchet. (Penrose P1/P2/P3 done: `generators/aperiodic/`.)
+- [x] Hat monotile (Einstein) via the H/T/P/F metatile substitution (`generators/aperiodic/hat.js`).
+- [ ] Aperiodic generators (milestone 6): spectre, cut-and-project, Truchet. (Penrose P1/P2/P3 and the hat done: `generators/aperiodic/`.)
+- [ ] Hat: option to draw the H/T/P/F metatile outlines; spectre as the chiral variant; a generic centre / pan beyond the fixed level-9 supertile.
+- [ ] Hat: integer-exact substitution (a combinatorial rewrite of `hat-subst.js`; see ARCHITECTURE.md, Hat precision). Under consideration, probably before the spectre is added. Today the hats are snapped to their integer lattice placement at emission; the integers (`rot, flip, u, v`) are not yet in the IR, e.g. as a tag for exact vertex matching.
 - [ ] Penrose: matching-rule decorations (P3 arrows, P2 curves, P1 markings) as edge classes, and the six decorated P1 tiles. Today the plain shapes are emitted and the tiling is only guaranteed legal by construction.
 - [ ] Penrose: other 5-fold centres (the other parity gives a different 5-fold tiling), or a generic centre / phason shift so the pattern can be panned beyond the origin.
 - [ ] Penrose: `tileSet` conversions P2 <-> P3 <-> P1 are by regrouping the same patch; a stored tiling would need the same ring coordinates (not floats) to convert exactly.
 
 ## Orientation / rotation
-- [ ] Mirror/flip support (`orient.flip` is always `false`).
+- [ ] Mirror/flip support in the orientation policies. `orient.flip` is `false` everywhere except the hat generator, which sets it for its reflected hats; `applyOrientation`/`applyTwist` do not know about it.
 
 ## Editor (milestone 5)
 - [ ] `js/editor/`: edit prototile edges under the symmetry constraints in each edge's `pair`.
