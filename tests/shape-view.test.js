@@ -130,3 +130,95 @@ test('editableParams is consistent with canEdit', () => {
   }
   assert.equal(editableParams('hexagon', {}), null);
 });
+
+test('a curved edge is drawn as the curve (C in the edge, hit target and tile outline), with handles on its anchors', () => {
+  const curved = { generator: 'square', edges: { sq: { e0: [['M', 0, 0], ['C', 0.2, 0.4, 0.4, 0.4, 0.5, 0.2], ['L', 1, 0]] } } };
+  const svg = svgOf(square, curved);
+  assert.ok(/class="edge rep" d="M-50 -50C[^"]*L50 -50"/.test(svg));
+  assert.ok(/class="hit" data-pid="sq" data-edge="e0" d="M-50 -50C/.test(svg));
+  assert.ok(/class="tile" d="M-50 -50C[^"]*Z"/.test(svg));
+  assert.equal(count(svg, /class="handle"/g), 1 + 1); // one anchor on the top edge, one on the bottom edge it is glued to
+  assert.ok(!/NaN|undefined/.test(svg));
+});
+
+// ---- node selection, handles, zoom ------------------------------------------------------------------------------------
+
+const ARCH = [['M', 0, 0], ['C', 0.1, 0.5, 0.4, 0.5, 0.5, 0.2], ['C', 0.6, -0.1, 0.9, -0.1, 1, 0]];
+const arch = { generator: 'square', edges: { sq: { e0: ARCH } } };
+const els = (svg, cls) => [...svg.matchAll(new RegExp(`<(?:circle|line)[^>]*class="${cls}(?: [^"]*)?"[^>]*>`, 'g'))].map((m) => Object.fromEntries([...m[0].matchAll(/([\w-]+)="([^"]*)"/g)].map((a) => [a[1], a[2]])));
+const SEL = { pid: 'sq', eid: 'e0', node: 1 };
+const E = (svg) => Number(svg.match(/viewBox="(-?[\d.]+)/)[1]) * -1;
+
+test('every editable edge has a selectable ring just inside each end; the interior nodes carry their node number', () => {
+  const svg = svgOf(square, arch);
+  const ends = els(svg, 'end-pt');
+  assert.equal(ends.length, 8);                                             // 4 edges x 2 ends
+  assert.deepEqual(ends.filter((e) => e['data-edge'] === 'e0').map((e) => e['data-node']), ['0', '2']);
+  const first = ends.find((e) => e['data-edge'] === 'e0' && e['data-node'] === '0');
+  assert.ok(Number(first.cx) > -50 && Number(first.cx) < -35 && Math.abs(Number(first.cy) + 50) < 40);   // inside the edge, near its start corner (-50,-50)
+  assert.deepEqual(els(svg, 'handle').filter((h) => h['data-edge'] === 'e0').map((h) => [h['data-index'], h['data-node']]), [['0', '1']]);
+});
+
+test('nothing selected: no arms or handles; a selected node is marked and shows an arm and a handle on each side', () => {
+  const none = svgOf(square, arch);
+  assert.equal(els(none, 'arm').length + els(none, 'ctl').length, 0);
+  const svg = tileEditorSVG({ ...model(square), shape: arch, selected: SEL });
+  assert.deepEqual(els(svg, 'handle selected').map((h) => h['data-edge']).sort(), ['e0', 'e2']);   // the glued bottom edge shows the same node
+  const top = els(svg, 'ctl').filter((c) => c['data-edge'] === 'e0');
+  assert.deepEqual(top.map((c) => c['data-role']).sort(), ['in', 'out']);
+  assert.deepEqual(top.map((c) => [c.cx, c.cy]).sort(), [['-10', '-100'], ['10', '-40']].sort());     // stored (0.4,0.5) and (0.6,-0.1) mapped into the tile
+  assert.ok(top.every((c) => !c.class.includes('virtual')));
+  assert.equal(els(svg, 'arm').length, 4);                                  // two per displayed member
+});
+
+test('a reversed member (the glued bottom edge) shows the same handles with their stored roles', () => {
+  const svg = tileEditorSVG({ ...model(square), shape: arch, selected: SEL });
+  const bottom = els(svg, 'ctl').filter((c) => c['data-edge'] === 'e2');
+  assert.equal(bottom.length, 2);
+  // the bottom edge is the top edge moved down a tile and walked backwards: stored 'in' (-10,-100) lands at (-10,0), 'out' (10,-40) at (10,60)
+  const at = (role) => { const c = bottom.find((x) => x['data-role'] === role); return `${c.cx},${c.cy}`; };
+  assert.equal(at('in'), '-10,0'); assert.equal(at('out'), '10,60');
+  assert.ok(bottom.every((c) => c['data-node'] === '1'));
+});
+
+test('a node between plain lines shows virtual handles a third of the way along each segment; the ends show one', () => {
+  const bump = { generator: 'square', edges: { sq: { e0: [['M', 0, 0], ['L', 0.5, 0.3], ['L', 1, 0]] } } };
+  const mid = els(tileEditorSVG({ ...model(square), shape: bump, selected: SEL }), 'ctl').filter((c) => c['data-edge'] === 'e0');
+  assert.equal(mid.length, 2); assert.ok(mid.every((c) => c.class.includes('virtual')));
+  const start = els(tileEditorSVG({ ...model(square), shape: bump, selected: { ...SEL, node: 0 } }), 'ctl').filter((c) => c['data-edge'] === 'e0');
+  assert.equal(start.length, 1); assert.equal(start[0]['data-role'], 'out');
+  const end = els(tileEditorSVG({ ...model(square), shape: bump, selected: { ...SEL, node: 2 } }), 'ctl').filter((c) => c['data-edge'] === 'e0');
+  assert.deepEqual(end.map((c) => c['data-role']), ['in']);
+});
+
+test('zoom: a handle outside the view widens it just enough; a smaller minE never zooms in; a handle inside changes nothing', () => {
+  const plain = E(svgOf(square, arch)), shallow = { generator: 'square', edges: { sq: { e0: [['M', 0, 0], ['C', 0.1, 0.2, 0.4, 0.2, 0.5, 0.1], ['L', 1, 0]] } } };
+  assert.equal(E(tileEditorSVG({ ...model(square), shape: shallow, selected: SEL })), plain);                   // handles inside the view: no change
+  assert.ok(E(tileEditorSVG({ ...model(square), shape: arch, selected: SEL })) > plain);                         // the arch's handle sits at y = -100, past the default margin
+  const far = { generator: 'square', edges: { sq: { e0: [['M', 0, 0], ['C', 0.1, 1.9, 0.4, 1.9, 0.5, 0.2], ['L', 1, 0]] } } };   // control point 1.9 edge-lengths out: y = -240
+  const zoomed = E(tileEditorSVG({ ...model(square), shape: far, selected: SEL }));
+  assert.ok(zoomed > plain && zoomed > 240 && zoomed < 240 * 1.1, `${plain} -> ${zoomed}`);
+  const noSel = E(tileEditorSVG({ ...model(square), shape: far }));
+  assert.equal(noSel, plain);                                                // nothing selected: back to the normal view
+  assert.equal(E(tileEditorSVG({ ...model(square), shape: shallow, selected: SEL, minE: zoomed })), zoomed);
+  assert.equal(E(tileEditorSVG({ ...model(square), shape: shallow, selected: SEL, minE: 1 })), plain);
+});
+
+test('symmetric edge: the middle node is selectable and shows its in handle only; the other half has no controls', () => {
+  const tri = model(triangle), shapeT = { generator: 'triangle', edges: { tri: { e0: [['M', 0, 0], ['C', 0.1, 0.3, 0.3, 0.3, 0.5, 0]] } } };
+  const svg = tileEditorSVG({ ...tri, shape: shapeT, selected: { pid: 'tri', eid: 'e0', node: 1 } });
+  const fixed = els(svg, 'fixed-pt selected');
+  assert.equal(fixed.length, 1); assert.equal(fixed[0]['data-node'], '1');
+  const c = els(svg, 'ctl');
+  assert.deepEqual(c.map((x) => x['data-role']), ['in']);
+  assert.equal(els(svg, 'arm').length, 1);
+  const first = els(tileEditorSVG({ ...tri, shape: shapeT, selected: { pid: 'tri', eid: 'e0', node: 0 } }), 'ctl');
+  assert.deepEqual(first.map((x) => x['data-role']), ['out']);
+});
+
+test('a selection that no longer exists (a node number past the end, an unknown edge) draws nothing extra and does not throw', () => {
+  for (const selected of [{ ...SEL, node: 9 }, { ...SEL, node: -1 }, { pid: 'zz', eid: 'e0', node: 0 }, { pid: 'sq', eid: 'e9', node: 0 }]) {
+    const svg = tileEditorSVG({ ...model(square), shape: arch, selected });
+    assert.equal(els(svg, 'ctl').length + els(svg, 'arm').length, 0); assert.ok(!/NaN|undefined/.test(svg));
+  }
+});

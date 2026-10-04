@@ -1,20 +1,14 @@
 /**
  * Renderer: (IR, style, {width,height}, opts) -> standalone SVG string. Pure, no DOM.
  * Default: prototiles in <defs>, instances as <use>. opts.flatten writes independent <path>s.
- * Path support: M, L, Z only (extend `pathD` when curved edges arrive).
+ * Path support: whatever the command registry in core/path.js knows (M, L, C, Z); this file only asks it for SVG text.
  */
-import { apply } from '../core/affine.js';
+import { transformPath, pathToD } from '../core/path.js';
 import { colorFor } from '../style/colorings.js';
 
 const fmt = (n, p) => String(+n.toFixed(p));
 
-function pathD(path, m, p) {
-  return path.map(([c, ...v]) => {
-    if (c === 'Z') return 'Z';
-    const [x, y] = m ? apply(m, v) : v;
-    return `${c}${fmt(x, p)} ${fmt(y, p)}`;
-  }).join('');
-}
+const pathD = (path, m, p) => pathToD(m ? transformPath(path, m) : path, p);
 
 /** Closed outline: concatenate edges, dropping each later edge's initial M. */
 const outline = (pt) => [...pt.edges.flatMap((e, i) => (i ? e.path.slice(1) : e.path)), ['Z']];

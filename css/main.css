@@ -28,7 +28,13 @@ body.shaping { --side: 460px; }
 .tile-editor .edge.derived { stroke-dasharray: 6 4; stroke-width: 2px; }
 .tile-editor .hit { fill: none; stroke: transparent; stroke-width: 16px; cursor: copy; }
 .tile-editor .handle { fill: Canvas; stroke: #2563eb; stroke-width: 2px; cursor: grab; }
-.tile-editor .derived-pt { fill: none; stroke: #2563eb; stroke-width: 1.5px; }
+.tile-editor .derived-pt { fill: none; stroke: #2563eb; stroke-width: 1.5px; pointer-events: none; }
+.tile-editor .fixed-pt, .tile-editor .end-pt { fill: Canvas; stroke: #2563eb; stroke-width: 1.5px; cursor: pointer; }
+.tile-editor .handle.selected, .tile-editor .fixed-pt.selected, .tile-editor .end-pt.selected { fill: #2563eb; }
+.node-tools .toggle { display: flex; align-items: center; gap: .4em; font-size: .9em; }
+.tile-editor .arm { stroke: #2563eb; stroke-width: 1.5px; pointer-events: none; }
+.tile-editor .ctl { fill: #2563eb; stroke: Canvas; stroke-width: 1.5px; cursor: grab; }
+.tile-editor .ctl.virtual { fill: Canvas; stroke: #2563eb; opacity: .7; }
 .tile-editor.invalid .tile { stroke: #dc2626; fill: #dc262633; }
 .tile-tabs { display: flex; gap: 4px; margin: var(--gap) 0 0; }
 .tile-tabs button[aria-pressed=true] { font-weight: 600; background: Highlight; color: HighlightText; }

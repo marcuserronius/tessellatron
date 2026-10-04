@@ -3,7 +3,8 @@
  * Types only (JSDoc); see ARCHITECTURE.md.
  *
  * @typedef {[number,number,number,number,number,number]} Affine   SVG-style matrix
- * @typedef {Array<['M'|'L', number, number]|['Z']>} Path          Currently M/L/Z only
+ * @typedef {Array<['M'|'L', number, number]|['C', number, number, number, number, number, number]|['Z']>} Path
+ *           Segments; the command set lives in core/path.js (COMMANDS): M, L, C (cubic Bézier), Z
  *
  * @typedef {Object} Edge
  * @property {string} id

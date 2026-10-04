@@ -11,8 +11,10 @@ import { styleParams } from '../js/style/colorings.js';
 import { edgeClasses } from '../js/editor/classes.js';
 import { retile } from '../js/editor/modes.js';
 import * as triangle from '../js/generators/periodic/triangle.js';
+import { transformPath, flattenPath } from '../js/core/path.js';
 import {
   applyShape, shapeProblems, crossingProblems, canEdit, sanitizeShape, edgeFrame, toLocal, fromLocal, outlinePoints, LIMITS,
+  edgeFromPoints, expandEdge, frameMatrix, hasEdits, outlinePath,
 } from '../js/editor/shape.js';
 
 const base = { ...defaults(square.params), size: 100 };
@@ -281,4 +283,130 @@ test('sanitizeShape keeps a valid non-default mode and drops junk modes', () => 
   const bad = sanitizeShape({ generator: 'square', mode: '../x', edges: {} });
   assert.deepEqual(bad.shape, { generator: 'square', edges: {} });
   assert.deepEqual(bad.warnings, ['mode: ignored']);
+});
+
+// ---- edges stored as paths, with curves ----------------------------------------------------------------------------
+
+/** Glued edges must carry the same CURVE: sample every edge (C segments included) in world space and compare. */
+function curveFit(shaped, steps = 12) {
+  const q = (p) => p.map((v) => Math.round(v * 1e4)).join(','), world = new Map();
+  shaped.tiles.forEach((t) => shaped.prototiles[t.proto].edges.forEach((e) => {
+    const curve = flattenPath(transformPath(e.path, t.transform), steps);
+    world.set(`${q(curve[0])}>${q(curve.at(-1))}`, curve);
+  }));
+  let checked = 0, worst = 0;
+  for (const [k, w] of world) {
+    const [a, b] = k.split('>'), o = world.get(`${b}>${a}`);
+    if (!o) continue;
+    const r = [...o].reverse(); checked++;
+    worst = Math.max(worst, r.length === w.length ? Math.max(...w.map((p, i) => Math.hypot(p[0] - r[i][0], p[1] - r[i][1]))) : Infinity);
+  }
+  return { checked, worst };
+}
+const areaOf = (proto) => signedArea(flattenPath(outlinePath(proto), 12));
+const curveEdge = (i = 0) => [['M', 0, 0], ['C', 0.15, 0.3 + 0.03 * i, 0.35, 0.3, 0.5, 0.05], ['C', 0.65, -0.2, 0.85, -0.2 - 0.02 * i, 1, 0]];
+const kinds = (proto) => proto.edges.map((e) => e.path.map((x) => x[0]).join(''));
+
+test('frameMatrix is toLocal as an affine; it is a reflection (negative determinant)', () => {
+  const f = edgeFrame(gen().prototiles.sq.edges[1].path), m = frameMatrix(f);
+  for (const p of [[0, 0], [1, 0], [0.3, 0.2], [-0.4, 1.1]]) {
+    const a = toLocal(f, p), b = [m[0] * p[0] + m[2] * p[1] + m[4], m[1] * p[0] + m[3] * p[1] + m[5]];
+    assert.ok(close(a[0], b[0]) && close(a[1], b[1]));
+  }
+  assert.ok(m[0] * m[3] - m[1] * m[2] < 0);
+});
+
+test('an edge stored as a path gives the same tiles as the same points stored as a list (free and symmetric)', () => {
+  const as = (v) => ({ generator: 'square', edges: { sq: { e0: v, e1: v === WIGGLE ? SIDE : edgeFromPoints(SIDE) } } });
+  assert.deepEqual(applyShape(gen(), as(edgeFromPoints(WIGGLE))), applyShape(gen(), as(WIGGLE)));
+  const tri = triangle.generate({ ...defaults(triangle.params), size: 100 }, [-300, -300, 300, 300]);
+  const one = { ...tri, tiles: tri.tiles.map((t) => ({ ...t, orient: { rot: 0, flip: false } })) };
+  const pts = [[0.2, 0.25], [0.35, -0.1]];
+  assert.deepEqual(applyShape(one, { generator: 'triangle', edges: { tri: { e0: edgeFromPoints(pts, 'symmetric') } } }),
+    applyShape(one, { generator: 'triangle', edges: { tri: { e0: pts } } }));
+});
+
+test('expandEdge completes a symmetric half by turning it about the middle and walking it backwards', () => {
+  assert.deepEqual(expandEdge(edgeFromPoints([[0.2, 0.3]], 'symmetric'), 'symmetric'), edgeFromPoints([[0.2, 0.3], [0.5, 0], [0.8, -0.3]]));
+  assert.equal(expandEdge(edgeFromPoints([[0.2, 0.3]]), 'free').length, 3);
+  assert.equal(hasEdits(undefined), false); assert.equal(hasEdits([]), false); assert.equal(hasEdits([['M', 0, 0], ['L', 1, 0]]), false);
+  assert.equal(hasEdits([['M', 0, 0], ['C', 0, 0, 1, 0, 1, 0]]), true); assert.equal(hasEdits(WIGGLE), true);
+});
+
+test('curved edges: cubics reach the prototile paths, both sides of a glue carry the same curve, in every mode', () => {
+  for (const mode of MODES) for (const extra of [{}, { rotation: 17 }, { orientMode: 'cycle' }]) {
+    const ir = raw(extra), edges = {};
+    edgeClasses(retile(ir, mode)).forEach((c, i) => { (edges[c.rep.proto] ??= {})[c.rep.edge] = curveEdge(i); });
+    const s = mk(mode, edges), shaped = applyShape(ir, s), label = `${mode} ${JSON.stringify(extra)}`;
+    assert.deepEqual(shapeProblems(ir, s), [], label);
+    const { checked, worst } = curveFit(shaped);
+    assert.ok(checked > 100 && worst < 1e-9, `${label}: ${checked} edges, worst ${worst}`);
+    for (const proto of Object.values(shaped.prototiles)) {
+      assert.ok(proto.edges.every((e) => e.path.length === 3 && e.path[1][0] === 'C' && e.path[2][0] === 'C'), label); // every edge of the square is in a class here
+      proto.edges.forEach((e, n) => assert.deepEqual(e.path.at(-1).slice(-2), proto.edges[(n + 1) % 4].path[0].slice(1))); // closed, ends pinned
+    }
+    const n = Object.keys(shaped.prototiles).length;
+    assert.ok(close(Object.values(shaped.prototiles).reduce((sum, p) => sum + areaOf(p), 0), n * 100 * 100, 1e-6), `${label}: areas add up`);
+  }
+});
+
+test('a cubic on the top edge becomes the matching cubic on the bottom edge (reversed, control points swapped)', () => {
+  const sq = applyShape(gen(), shape([['M', 0, 0], ['C', 0.2, 0.4, 0.8, 0.4, 1, 0]])).prototiles.sq;
+  assert.deepEqual(kinds(sq), ['MC', 'ML', 'MC', 'ML']);
+  assert.deepEqual(sq.edges[0].path, [['M', -50, -50], ['C', -30, -90, 30, -90, 50, -50]]);
+  assert.deepEqual(sq.edges[2].path, [['M', 50, 50], ['C', 30, 10, -30, 10, -50, 50]]);
+});
+
+test('a symmetric edge stored as a half cubic is completed smoothly and point-symmetrically', () => {
+  const tri = triangle.generate({ ...defaults(triangle.params), size: 100 }, [-300, -300, 300, 300]);
+  const one = { ...tri, tiles: tri.tiles.map((t) => ({ ...t, orient: { rot: 0, flip: false } })) };
+  const s = { generator: 'triangle', edges: { tri: { e0: [['M', 0, 0], ['C', 0.1, 0.3, 0.3, 0.3, 0.5, 0]] } } }, shaped = applyShape(one, s);
+  const path = shaped.prototiles.tri.edges[0].path;
+  assert.deepEqual(path.map((x) => x[0]), ['M', 'C', 'C']);
+  const mid = path[1].slice(5), c2 = path[1].slice(3, 5), c1 = path[2].slice(1, 3);
+  assert.ok(close(c2[0] + c1[0], 2 * mid[0]) && close(c2[1] + c1[1], 2 * mid[1])); // control points either side of the middle are opposite: smooth
+  const P = flattenPath(path, 10), A = P[0], B = P.at(-1), m = [(A[0] + B[0]) / 2, (A[1] + B[1]) / 2];
+  P.forEach((p, k) => { const q = P[P.length - 1 - k]; assert.ok(close(p[0] + q[0], 2 * m[0]) && close(p[1] + q[1], 2 * m[1])); });
+  assert.ok(curveFit(shaped).worst < 1e-9);
+});
+
+test('crossing checks are skipped for outlines with curves (TODO.md); polyline outlines are still checked', () => {
+  const ir = gen();
+  const lines = [['M', 0, 0], ['L', 0.7, 0.2], ['L', 0.3, 0.2], ['L', 0.5, -0.3], ['L', 1, 0]];
+  const curved = [['M', 0, 0], ['L', 0.7, 0.2], ['L', 0.3, 0.2], ['C', 0.4, -0.1, 0.6, -0.1, 0.5, -0.3], ['L', 1, 0]]; // same anchors
+  assert.deepEqual(crossingProblems(ir, shape(lines)), ['sq: the outline crosses itself']);
+  assert.deepEqual(crossingProblems(ir, shape(curved)), []);
+});
+
+test('sanitizeShape on path edges: clamps, pins the start, snaps the end, refuses what it cannot keep', () => {
+  const edges = (v) => sanitizeShape({ generator: 'square', edges: { sq: { e0: v } } });
+  const ok = edges([['M', 0, 0], ['C', 0.1, 0.3, 0.4, 0.3, 0.5, 0.1], ['L', 1, 0]]);
+  assert.deepEqual(ok.shape.edges.sq.e0[1], ['C', 0.1, 0.3, 0.4, 0.3, 0.5, 0.1]); assert.deepEqual(ok.warnings, []);
+  assert.deepEqual(edges([['M', 0, 0], ['C', 99, -99, 0.4, 0.3, 0.5, 0.1], ['L', 1, 0]]).shape.edges.sq.e0[1].slice(1, 3), [LIMITS.t[1], LIMITS.n[0]]);
+  const moved = edges([['M', 1e-7, 0], ['L', 0.5, 0.1], ['L', 1.0000001, 0]]);
+  assert.deepEqual(moved.shape.edges.sq.e0, [['M', 0, 0], ['L', 0.5, 0.1], ['L', 1, 0]]); assert.equal(moved.warnings.length, 0); // within 1e-6: snapped quietly
+  assert.match(edges([['M', 0.1, 0.1], ['L', 0.5, 0.1], ['L', 1, 0]]).warnings[0], /start moved/);
+  const half = edges([['M', 0, 0], ['L', 0.3, 0.1], ['L', 0.5, 0]]);
+  assert.deepEqual(half.shape.edges.sq.e0.at(-1), ['L', 0.5, 0]);                                    // a symmetric half is a valid ending too
+  for (const [bad, why] of [
+    [[['M', 0, 0], ['Q', 0.5, 0.5, 1, 0]], /command the editor does not support/],
+    [[['M', 0, 0], ['Z']], /command the editor does not support/],
+    [[['M', 0, 0], ['L', 0.5]], /invalid segment/],
+    [[['M', 0, 0], ['L', 0.5, NaN], ['L', 1, 0]], /invalid segment/],
+    [[['M', 0, 0], ['L', 0.7, 0.1]], /does not end/],
+    [[['L', 0, 0], ['L', 1, 0]], /not a path/],
+    [Array.from({ length: LIMITS.points + 3 }, (_, i) => (i ? ['L', i / 100, 0.1] : ['M', 0, 0])), /more than/],
+  ]) {
+    const r = edges(bad);
+    assert.deepEqual(r.shape.edges, {}, String(why)); assert.match(r.warnings[0], why);
+  }
+  assert.deepEqual(edges([['M', 0, 0], ['L', 1, 0]]).shape.edges, {});                                // the plain line is no edit
+  const mixed = sanitizeShape({ generator: 'square', edges: { sq: { e0: [[0.3, 0.2]], e1: [['M', 0, 0], ['L', 0.5, 0.1], ['L', 1, 0]] } } });
+  assert.deepEqual(mixed.shape.edges.sq.e0, [[0.3, 0.2]]); assert.equal(mixed.shape.edges.sq.e1.length, 3); // lists stay lists
+});
+
+test('outlinePath keeps curves, closes with Z, and matches outlinePoints for polyline outlines', () => {
+  const plain = gen().prototiles.sq, shaped = applyShape(gen(), shape([['M', 0, 0], ['C', 0.2, 0.4, 0.8, 0.4, 1, 0]])).prototiles.sq;
+  assert.deepEqual(outlinePath(plain), [['M', -50, -50], ['L', 50, -50], ['L', 50, 50], ['L', -50, 50], ['Z']]);
+  assert.deepEqual(outlinePath(shaped), [['M', -50, -50], ['C', -30, -90, 30, -90, 50, -50], ['L', 50, 50], ['C', 30, 10, -30, 10, -50, 50], ['Z']]); // top and bottom curved; the closing L of the left edge is Z's job
 });

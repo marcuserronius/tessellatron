@@ -1,7 +1,8 @@
 /**
  * Project save/load (pure, no DOM): state <-> JSON text.
- * File shape: { format: "tessellatron-project", version: 2, generator, params, style, view, shape? }.
- * Version 1 files (no shape) still load. `shape` (editor/shape.js) is written only when it belongs to the
+ * File shape: { format: "tessellatron-project", version: 3, generator, params, style, view, shape? }.
+ * Version 3 stores an edited edge as a path (editor/shape.js; curves are possible), which older builds would misread,
+ * so they refuse such files by version. Version 2 files (edges as point lists) and version 1 files (no shape) still load. `shape` (editor/shape.js) is written only when it belongs to the
  * current generator and has edits; on load it goes through sanitizeShape and is dropped (with a warning)
  * if it was made for another generator. parseProject/fromHash always return `shape` (null when absent).
  * The URL hash does not carry the shape.
@@ -20,7 +21,7 @@ import { defaults } from './schema.js';
 import { sanitizeShape } from '../editor/shape.js';
 
 export const FORMAT = 'tessellatron-project';
-export const VERSION = 2;
+export const VERSION = 3;
 
 function check(p, v) {
   switch (p.type) {

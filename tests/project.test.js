@@ -106,7 +106,7 @@ const sq = { generator: 'square', edges: { sq: { e0: [[0.3, 0.2], [0.7, -0.1]], 
 test('project v2: a shape round-trips; v1 files and shape-less saves load with shape null', () => {
   const state = { ...stateFor(get('square')), shape: sq };
   const text = serializeProject(state);
-  assert.equal(JSON.parse(text).version, 2);
+  assert.equal(JSON.parse(text).version, 3);
   const back = parseProject(text, schemas);
   assert.deepEqual(back.state, state);
   assert.deepEqual(back.warnings, []);
@@ -151,4 +151,30 @@ test('project v2: the tiling mode is saved with the shape, also when there are n
   const { state, warnings } = parseProject(JSON.stringify(odd), schemas);
   assert.equal(state.shape, null);
   assert.deepEqual(warnings, ['shape.mode: ignored']);
+});
+
+const curved = { generator: 'square', edges: { sq: { e0: [['M', 0, 0], ['C', 0.2, 0.4, 0.4, 0.4, 0.5, 0.1], ['L', 0.8, -0.2], ['L', 1, 0]], e1: [[0.5, 0.25]] } } };
+
+test('project v3: an edge stored as a path (with a cubic) round-trips; a v2 file with point lists still loads as it was', () => {
+  const state = { ...stateFor(get('square')), shape: curved }, text = serializeProject(state);
+  assert.equal(JSON.parse(text).version, 3);
+  const back = parseProject(text, schemas);
+  assert.deepEqual(back.state, state);
+  assert.deepEqual(back.warnings, []);
+  const v2 = parseProject(JSON.stringify({ ...JSON.parse(serializeProject(stateFor(get('square')))), version: 2, shape: sq }), schemas);
+  assert.deepEqual(v2.state.shape, sq);                       // lists are kept as lists and read as polylines on demand
+  assert.throws(() => parseProject(JSON.stringify({ ...JSON.parse(text), version: 4 }), schemas), /version/);
+});
+
+test('project v3: path edges are checked on load: bad ones are dropped with a warning, the rest stays', () => {
+  const bad = { generator: 'square', edges: { sq: {
+    e0: [['M', 0, 0], ['C', 9, 9, 0.4, 0.4, 0.5, 0.1], ['L', 1, 0]],   // control point clamped
+    e1: [['M', 0, 0], ['Q', 0.5, 0.5, 1, 0]],                         // command the editor does not know
+    e2: [['M', 0, 0], ['L', 0.3, 0.1], ['L', 0.7, 0.2]],              // does not end at a corner or the middle
+    e3: [['M', 0, 0], ['L', 0.5, 0.1, 7], ['L', 1, 0]],               // wrong number of numbers
+  } } };
+  const doc = { ...JSON.parse(serializeProject(stateFor(get('square')))), shape: bad }, { state, warnings } = parseProject(JSON.stringify(doc), schemas);
+  assert.deepEqual(Object.keys(state.shape.edges.sq), ['e0']);
+  assert.deepEqual(state.shape.edges.sq.e0[1], ['C', 3, 2, 0.4, 0.4, 0.5, 0.1]);
+  assert.deepEqual(warnings.map((w) => w.split(':')[0]), ['shape.sq.e1', 'shape.sq.e2', 'shape.sq.e3']);
 });

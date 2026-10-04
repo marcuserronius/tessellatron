@@ -25,6 +25,16 @@ test('snapshot: flatten writes one transformed <path> per tile and no <defs>/<us
     + '<g stroke="#000000" stroke-width="1" stroke-linejoin="round"><path d="M4 4L6 4L6 6L4 6L4 4Z" fill="#aaaaaa"/></g></svg>');
 });
 
+test('curved edges: C segments reach the SVG, in <defs> untransformed and in flatten mode mapped (control points too)', () => {
+  const bulge = { center: [0, 0], rotUnits: 4, edges: [
+    { id: 'e0', path: [['M', -1, -1], ['C', -1, -3, 1, -3, 1, -1]] }, { id: 'e1', path: [['M', 1, -1], ['L', 1, 1]] },
+    { id: 'e2', path: [['M', 1, 1], ['L', -1, 1]] }, { id: 'e3', path: [['M', -1, 1], ['L', -1, -1]] }] };
+  const cir = { ...ir, prototiles: { sq: bulge } };
+  assert.ok(renderSVG(cir, st, view).includes('<path id="p-sq" d="M-1 -1C-1 -3 1 -3 1 -1L1 1L-1 1L-1 -1Z"/>'));
+  assert.ok(renderSVG(cir, st, view, { flatten: true }).includes('d="M4 4C4 2 6 2 6 4L6 6L4 6L4 4Z"'));
+  assert.ok(!/NaN|undefined/.test(renderSVG(cir, st, view, { flatten: true })));
+});
+
 test('transparent background drops the <rect>; precision rounds numbers', () => {
   assert.ok(!renderSVG(ir, { ...st, transparentBg: true }, view).includes('<rect'));
   const third = { ...ir, tiles: [{ ...ir.tiles[0], transform: [1, 0, 0, 1, 1 / 3, 2 / 3] }] };

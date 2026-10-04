@@ -54,3 +54,12 @@ test('a shape that belongs to another generator costs nothing: no class derivati
   const shape = { generator: 'square', edges: { sq: { e0: [[0.3, 0.2]] } } }, h = state('hexagon', { shape });
   assert.deepEqual(buildIR(h, [0, 0, 200, 200]), get('hexagon').generate(h.params, [0, 0, 200, 200]));
 });
+
+test('a curved edge reaches the SVG as a C command, in <defs> and flattened', () => {
+  const shape = { generator: 'square', edges: { sq: { e0: [['M', 0, 0], ['C', 0.2, 0.4, 0.8, 0.4, 1, 0]] } } };
+  const s = state('square', { shape });
+  for (const flatten of [false, true]) {
+    const svg = buildSVG({ ...s, view: { ...s.view, flatten } });
+    assert.ok(/ d="[^"]*C[-\d. ]+[^"]*Z"/.test(svg) && !/NaN|undefined/.test(svg), `flatten ${flatten}`);
+  }
+});
