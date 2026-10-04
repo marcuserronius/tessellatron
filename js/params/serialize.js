@@ -1,6 +1,10 @@
 /**
  * Project save/load (pure, no DOM): state <-> JSON text.
- * File shape: { format: "tessellatron-project", version: 1, generator, params, style, view }.
+ * File shape: { format: "tessellatron-project", version: 2, generator, params, style, view, shape? }.
+ * Version 1 files (no shape) still load. `shape` (editor/shape.js) is written only when it belongs to the
+ * current generator and has edits; on load it goes through sanitizeShape and is dropped (with a warning)
+ * if it was made for another generator. parseProject/fromHash always return `shape` (null when absent).
+ * The URL hash does not carry the shape.
  * Loading never trusts the file: unknown keys are dropped; each value must match its schema entry
  * (type, select options, colour syntax) or falls back to the default; numbers are clamped to range.
  *
@@ -13,9 +17,10 @@
  *    -> { state, warnings }; throws Error with a readable message if the file is unusable.
  */
 import { defaults } from './schema.js';
+import { sanitizeShape } from '../editor/shape.js';
 
 export const FORMAT = 'tessellatron-project';
-export const VERSION = 1;
+export const VERSION = 2;
 
 function check(p, v) {
   switch (p.type) {
@@ -42,8 +47,13 @@ export function sanitize(schema, values = {}) {
   return { values: out, warnings };
 }
 
-export const serializeProject = ({ generator, params, style, view }) =>
-  JSON.stringify({ format: FORMAT, version: VERSION, generator, params, style, view }, null, 2);
+const shapeOf = ({ generator, shape }) =>
+  (shape && shape.generator === generator && (Object.keys(shape.edges ?? {}).length || shape.mode) ? { shape } : {});
+
+export const serializeProject = (state) => {
+  const { generator, params, style, view } = state;
+  return JSON.stringify({ format: FORMAT, version: VERSION, generator, params, style, view, ...shapeOf(state) }, null, 2);
+};
 
 export function parseProject(text, schemas) {
   let doc;
@@ -58,10 +68,14 @@ export function parseProject(text, schemas) {
     warnings.push(...r.warnings.map((w) => `${name}.${w}`));
     return r.values;
   };
-  return {
-    state: { generator: gen.id, params: section('params', gen.params), style: section('style', schemas.style), view: section('view', schemas.view) },
-    warnings,
-  };
+  const state = { generator: gen.id, params: section('params', gen.params), style: section('style', schemas.style), view: section('view', schemas.view), shape: null };
+  if (doc.shape !== undefined) {
+    const r = sanitizeShape(doc.shape);
+    warnings.push(...r.warnings.map((w) => `shape.${w}`));
+    if (r.shape && r.shape.generator !== gen.id) warnings.push(`shape: made for ${r.shape.generator}, ignored`);
+    else if (r.shape && (Object.keys(r.shape.edges).length || r.shape.mode)) state.shape = r.shape;
+  }
+  return { state, warnings };
 }
 
 const SECTIONS = [['p', 'params'], ['s', 'style'], ['v', 'view']];

@@ -9,8 +9,9 @@ import { defaults, viewParams } from './params/schema.js';
 import { listPresets, applyPreset } from './params/presets.js';
 import { serializeProject, parseProject, toHash, fromHash } from './params/serialize.js';
 import { styleParams } from './style/colorings.js';
-import { renderSVG } from './render/svg.js';
+import { buildSVG } from './app/pipeline.js';
 import { buildControls } from './ui/controls.js';
+import { mountShapeView } from './ui/shape-view.js';
 
 const $ = (id) => document.getElementById(id);
 const schemas = { generator: get, style: styleParams, view: viewParams };
@@ -24,13 +25,10 @@ const store = createStore(stateFromHash() ?? {
   params: defaults(first.params),
   style: defaults(styleParams),
   view: defaults(viewParams),
+  shape: null,
 });
 
-const currentSVG = () => {
-  const { generator, params, style, view } = store.get();
-  const ir = get(generator).generate(params, [0, 0, view.width, view.height]);
-  return renderSVG(ir, style, view, { flatten: view.flatten, precision: view.precision });
-};
+const currentSVG = () => buildSVG(store.get());
 
 const setIn = (section) => (id, value) => store.set({ [section]: { ...store.get()[section], [id]: value } });
 const shareURL = () => `${location.href.split('#')[0]}#${toHash(store.get(), schemas)}`;
@@ -58,12 +56,29 @@ $('preset').addEventListener('change', (e) => {
 });
 buildPanels();
 
+const shapeView = mountShapeView($('pane-shape'), {
+  getState: store.get,
+  setShape: (shape, opts) => store.set({ shape }, opts),
+  setParams: (patch, opts) => { store.set({ params: { ...store.get().params, ...patch } }, opts); buildPanels(); },
+});
+const showTab = (name) => {
+  $('pane-gen').hidden = name !== 'gen';
+  $('pane-shape').hidden = name !== 'shape';
+  document.body.classList.toggle('shaping', name === 'shape');
+  $('tab-gen').setAttribute('aria-pressed', String(name === 'gen'));
+  $('tab-shape').setAttribute('aria-pressed', String(name === 'shape'));
+  if (name === 'shape') shapeView.update();
+};
+$('tab-gen').addEventListener('click', () => showTab('gen'));
+$('tab-shape').addEventListener('click', () => showTab('shape'));
+
 let pending = 0, hashTimer = 0;
 const syncHistoryButtons = () => { $('undo').disabled = !store.canUndo(); $('redo').disabled = !store.canRedo(); };
 store.subscribe(() => {
   cancelAnimationFrame(pending);
   pending = requestAnimationFrame(() => { $('preview').innerHTML = currentSVG(); });
   syncHistoryButtons();
+  if (!$('pane-shape').hidden) shapeView.update();
   clearTimeout(hashTimer); // debounced: some browsers rate-limit history.replaceState
   hashTimer = setTimeout(() => { try { history.replaceState(null, '', `#${toHash(store.get(), schemas)}`); } catch { /* ignore */ } }, 250);
 });

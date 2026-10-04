@@ -8,7 +8,7 @@ import '../js/generators/index.js';
 import { get, list } from '../js/generators/registry.js';
 
 const schemas = { generator: get, style: styleParams, view: viewParams };
-const stateFor = (g) => ({ generator: g.id, params: defaults(g.params), style: defaults(styleParams), view: defaults(viewParams) });
+const stateFor = (g) => ({ generator: g.id, params: defaults(g.params), style: defaults(styleParams), view: defaults(viewParams), shape: null });
 
 test('registry lists the 3 regular, 8 Archimedean, Penrose and hat generators', () => assert.equal(list().length, 13));
 
@@ -73,7 +73,7 @@ const nonDefaultState = (g) => {
   const flip = (schema) => Object.fromEntries(schema.map((p) => [p.id,
     p.type === 'boolean' ? !p.default : p.type === 'select' ? p.options.at(-1)[0] : p.type === 'color' ? '#0a0b0c'
       : p.type === 'number' ? Math.min(p.max, Math.max(p.min, p.default + p.step * 3)) : p.default]));
-  return { generator: g.id, params: flip(g.params), style: flip(styleParams), view: flip(viewParams) };
+  return { generator: g.id, params: flip(g.params), style: flip(styleParams), view: flip(viewParams), shape: null };
 };
 
 test('URL hash: defaults encode to just the generator', () => {
@@ -99,4 +99,56 @@ test('URL hash: bad values fall back to defaults with warnings; unknown generato
   assert.equal(warnings.length, 4);
   assert.throws(() => fromHash('g=nope', schemas), /Unknown generator/);
   assert.throws(() => fromHash('', schemas), /Unknown generator/);
+});
+
+const sq = { generator: 'square', edges: { sq: { e0: [[0.3, 0.2], [0.7, -0.1]], e1: [[0.5, 0.25]] } } };
+
+test('project v2: a shape round-trips; v1 files and shape-less saves load with shape null', () => {
+  const state = { ...stateFor(get('square')), shape: sq };
+  const text = serializeProject(state);
+  assert.equal(JSON.parse(text).version, 2);
+  const back = parseProject(text, schemas);
+  assert.deepEqual(back.state, state);
+  assert.deepEqual(back.warnings, []);
+  const doc = JSON.parse(serializeProject(stateFor(get('square'))));
+  assert.ok(!('shape' in doc));
+  assert.equal(parseProject(JSON.stringify({ ...doc, version: 1 }), schemas).state.shape, null);
+});
+
+test('project v2: a shape is saved only for its own generator, and dropped on load otherwise', () => {
+  const hexState = { ...stateFor(get('hexagon')), shape: sq };
+  assert.ok(!('shape' in JSON.parse(serializeProject(hexState))));
+  const doc = { ...JSON.parse(serializeProject(stateFor(get('hexagon')))), shape: sq };
+  const { state, warnings } = parseProject(JSON.stringify(doc), schemas);
+  assert.equal(state.shape, null);
+  assert.deepEqual(warnings, ['shape: made for square, ignored']);
+});
+
+test('project v2: shapes are sanitised on load', () => {
+  const doc = { ...JSON.parse(serializeProject(stateFor(get('square')))), shape: { generator: 'square', edges: { sq: { e0: [[9, 0.5], 'bad'] } } } };
+  const { state, warnings } = parseProject(JSON.stringify(doc), schemas);
+  assert.deepEqual(state.shape.edges.sq.e0, [[3, 0.5]]);
+  assert.deepEqual(warnings, ['shape.sq.e0: dropped an invalid point']);
+  assert.equal(parseProject(JSON.stringify({ ...doc, shape: 5 }), schemas).state.shape, null);
+  assert.equal(parseProject(JSON.stringify({ ...doc, shape: { generator: 'square', edges: {} } }), schemas).state.shape, null);
+});
+
+test('URL hash does not carry the shape; loading a link gives shape null', () => {
+  const state = { ...stateFor(get('square')), shape: sq };
+  assert.equal(toHash(state, schemas), 'g=square');
+  assert.equal(fromHash('#g=square', schemas).state.shape, null);
+});
+
+test('project v2: the tiling mode is saved with the shape, also when there are no edits yet; the default mode is left out', () => {
+  const withMode = { ...stateFor(get('square')), shape: { generator: 'square', mode: 'pair-turn-cw', edges: { sq: { e1: [[0.3, 0.2]] } } } };
+  const text = serializeProject(withMode);
+  assert.equal(JSON.parse(text).shape.mode, 'pair-turn-cw');
+  assert.deepEqual(parseProject(text, schemas).state, withMode);
+  const empty = { ...stateFor(get('square')), shape: { generator: 'square', mode: 'pair', edges: {} } };
+  assert.deepEqual(parseProject(serializeProject(empty), schemas).state, empty);
+  assert.ok(!('mode' in JSON.parse(serializeProject({ ...stateFor(get('square')), shape: sq })).shape)); // default mode: no key
+  const odd = { ...JSON.parse(serializeProject(withMode)), shape: { generator: 'square', mode: 'no way!', edges: {} } };
+  const { state, warnings } = parseProject(JSON.stringify(odd), schemas);
+  assert.equal(state.shape, null);
+  assert.deepEqual(warnings, ['shape.mode: ignored']);
 });

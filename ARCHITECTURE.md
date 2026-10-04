@@ -55,7 +55,7 @@ Dependencies point downward only:
 | `style` | colorings, strokes, fills (operates on IR + style config) | no |
 | `policies` | orientation/transform post-processing | no |
 | `render` | `(IR, style, viewport) → SVG string` | no |
-| `editor` (future) | edge shaping under symmetry constraints | no |
+| `editor` | edge shaping under symmetry constraints (`pairing.js`, `shape.js`; UI not yet) | no |
 | `app` | state store, events, routing | no |
 | `ui` | panels, schema-driven controls, canvas, export | yes |
 
@@ -78,8 +78,8 @@ js/
   style/                 colorings.js strokes.js
   policies/              orientation.js
   render/                svg.js defs-use.js flatten.js
-  editor/                (future)
-  app/                   store.js (with undo/redo) events.js router.js
+  editor/                modes.js classes.js pairing.js shape.js edit.js
+  app/                   store.js (with undo/redo) pipeline.js events.js router.js
   ui/                    panels.js controls.js canvas.js export.js
 scripts/                 bundle.js (standalone HTML build)
 tests/                   Node-runnable tests
@@ -105,6 +105,17 @@ docs/                    (future) per-module contracts; ARCHITECTURE.md stays at
 - Under consideration: an integer-exact hat substitution, with no float construction at all. It would be a combinatorial reformulation of `hat-subst.js`, not a port to a ring like Penrose's, because of the irrational outlines above. Probably worth doing before the spectre tile is added, so that tile starts from exact placements, and when the shape editor needs exact edge matching; until then the snap is the stopgap.
 - The hat is the one generator that emits reflected tiles: `orient.flip = true` and a transform with negative determinant, on the same prototile.
 - Each generator ships with presets and at least one Node test (tile count in a region; no gaps or overlaps for periodic ones).
+
+**Edge editor** (`editor/`, pure; depends on `core` only)
+- `modes.js`: a *tiling mode* says how many tile SHAPES a tiling has and how its tiles are turned, which together decide which edges are the same curve. Each tile gets a shape (A, B, ...) and a number of quarter turns from its lattice position (tags `i`, `j`); `retile(ir, mode)` re-points the tiles to one prototile per shape (the first keeps the id, later ones are `sq_b`, ...; copies with `tileClass: { of, index, label }`), turns their transforms about the tile centre (turns the generator already applied are undone first, so the Orientation setting never leaks in) and sets `orient.rot`. Squares have six modes: `single` (one shape, no turns: top = bottom, right = left), `pair` (shapes A and B in a checkerboard, no turns: A top = B bottom, A right = B left, and the reverse), `turn-cw` (one shape, quarter turns: right = bottom, left = top), `pair-turn-cw` (two shapes, quarter turns: A right = B bottom, A left = B top, and the reverse) and the mirror images `turn-ccw` / `pair-turn-ccw`. In the turned modes tile (i, j) turns `[[0,3],[1,2]][i mod 2][j mod 2]` quarters clockwise (negated for ccw): right and left neighbours are a quarter turn off, the ones above and below three quarters, so four tiles meet round a corner they all turn about. `describeEdges` states the relations of any tiling from its edge classes, so the text in the UI cannot disagree with the geometry (tests pin the wording above).
+- `classes.js` derives the *edge classes* from tile adjacency; an edge is identified by its shape and edge id (`tile.proto` is the shape). Two tile edges are glued when their world segments coincide, reversed; gluing edge a of tile A to edge b of tile B means `curve(b) = reverse(T curve(a))` with `T = inverse(B.transform) * A.transform`. Following glues from the lowest-numbered edge (the *representative*) gives each member edge a transform and a parity (reversed when the glue path is odd). A second route to the same edge is a constraint: same parity must agree (else the class is `locked`, straight only); differing parity means the curve must be point-symmetric about its middle (`symmetric`; any other turn locks it). Also locked: mirrored glues (not supported yet) and interior edges with no glued neighbour (row shift, twist). `kind` is `free`, `symmetric` or `locked`. All six square modes give only free classes (two classes of two edges for one shape, four for two shapes); `symmetric` arises when one shape serves tiles in several orientations without a mode (triangle IR as generated).
+- `pairing.js` is the static counterpart: validation of the generators' `pair` metadata for the canonical orientation (`pairingProblems`, `pairClasses`). The editor does not use it; tests check that it agrees with `classes.js` for the default orientation.
+- `shape.js`: a shape is `{ generator, mode?, edges: { shapeId: { edgeId: [[t, n], ...] } } }` keyed by the class representative (a shared edge is stored once, whichever tile it was edited from); `mode` (left out for `single`) selects the tiling, so the same edges mean different tilings in different modes (switching mode keeps the edits), in a normalized frame (`t` along the straight edge 0..1, `n` the outward offset, both in units of the edge length), so it survives changes of tile size. A free class stores all interior points; a symmetric class stores only the first half and the curve is completed by the middle `(0.5, 0)` and the mirror `(1-t, -n)`. `applyShape(ir, shape, classes?)` returns the IR re-tiled for the shape's mode with new polyline edge paths, so the renderer needs no change (it already draws any number of prototiles). While a shape applies, the Orientation setting is ignored (the mode decides the turns). When the shape changes nothing the raw IR comes back, orientation and all. Member endpoints are pinned to the exact corners. A shape is ignored for any other generator id.
+- `canEdit` is a coarse gate (generator allow-list `EDITABLE`, no row shift, no twist); what can actually be edited comes from the classes. `shapeNotes` names edits that have no effect (derived or locked edge, unknown edge), `crossingProblems` finds outlines that cross themselves (`core/polygon.js` `selfIntersects`) in EVERY tile shape, since an edit also reshapes the neighbours that share the edge, `shapeProblems` is both. The UI refuses a move only on crossings, so stale edits never block editing.
+- `edit.js`: pure operations on a shape (`insertPoint`, `movePoint`, `removePoint`, `resetEdge`, `nearestOnEdge`, which maps clicks on a symmetric edge's mirrored half back to the stored half; callers map pointer positions into the representative's frame first); each returns a new shape, or `null` when no edits are left (the app's "no shape").
+- `app/pipeline.js` (`generateIR`, `editorModel`, `buildIR`, `buildSVG`) is the one place state becomes IR and SVG. `editorModel` is a patch of tiles around the origin, re-tiled for the mode, plus its classes, cached per generator, params and mode (not per edits); `state.shape`, when set, is applied after generation using those classes. A shape belongs to the generator it was made for and is ignored (but kept) while another generator is selected.
+- UI: the sidebar has Generate | Shape tabs. The Shape tab starts with the tiling mode selector and a line listing which edges are the same curve (`describeEdges`). `ui/tile-editor-svg.js` is a pure model-to-SVG-string builder (tested in node): one upright reference tile of the chosen shape, the patch's other tiles ghosted around it as they really sit (turned or not, each with its own shape), edges by role. Every non-locked edge of the shown tile can be pressed or dragged: `ui/shape-view.js` (the thin DOM layer) maps the pointer through the edge class's transform into the representative's frame, so editing tile B's edge edits the curve stored under A. With more than one shape a selector (Tile A, Tile B) picks the tile shown. One drag is one undo step (`{ step: true }` for its first change, `{ merge: true }` for the rest).
+- Persistence: project files are version 2 (`shape` is written only for its own generator and sanitised on load; v1 files still load). The URL hash does not carry the shape.
 
 **Parameters**
 - Each generator declares its settings as a schema (type, range, default, label, group).
@@ -132,7 +143,7 @@ docs/                    (future) per-module contracts; ARCHITECTURE.md stays at
 2. **Params + UI**: schema, store, auto-generated controls (size, rotation, offsets, strokes, colors, gutters, region).
 3. **Triangle and hexagon** via lattice + motif; orientation policies.
 4. **Remaining Archimedean tilings**, presets, flatten export, project save/load (JSON).
-5. **Edge pairing + shape editor prototype** (start with square tiles, translation-paired edges).
+5. **Edge pairing + shape editor prototype** (start with square tiles, translation-paired edges). Tiling modes, edge classes, shape model, pipeline, Shape tab and project persistence are done for squares (six modes); curved edges, more tilings and URL persistence are open (see TODO.md).
 6. **Aperiodic**: substitution framework and Penrose P1/P2/P3 (done); then hat/spectre and others.
 
 ## Working with Claude on this codebase

@@ -16,9 +16,18 @@ Unimplemented items and known gaps. Milestone numbers refer to `ARCHITECTURE.md`
 - [ ] Mirror/flip support in the orientation policies. `orient.flip` is `false` everywhere except the hat generator, which sets it for its reflected hats; `applyOrientation`/`applyTwist` do not know about it.
 
 ## Editor (milestone 5)
-- [ ] `js/editor/`: edit prototile edges under the symmetry constraints in each edge's `pair`.
-- [ ] Curved edge paths: the renderer supports only `M`/`L`/`Z` (`pathD` in `render/svg.js`).
-- [ ] Edge-pairing metadata for all future generators (squares, triangles, hexagons done). The Archimedean tilings and Penrose have none: their edges are shared between different prototiles, so the IR needs inter-prototile pairing (edge classes) first.
+- [x] `editor/classes.js` (edge classes from tile adjacency: free, symmetric, locked), `editor/shape.js` (normalized edge shapes, `applyShape`, `shapeProblems`, `canEdit`, `sanitizeShape`), `editor/pairing.js` (static pair metadata check); `app/pipeline.js` applies `state.shape`. Square only (`EDITABLE` in `shape.js`).
+- [x] Tiling modes (`editor/modes.js`): one shape / two shapes, with or without quarter turns (cw and ccw), six modes for squares; each shape independently editable, shared edges edited once, mode saved with the shape. Mode selector, tile selector (A, B) and a relations line in the Shape tab; any edge of the shown tile can be dragged.
+- [ ] Modes for hexagons (one shape; turned versions with THREE shapes, the 3-colouring) and triangles (up and down as two shapes, or one shape with symmetric edges): add a mode table and edge names per generator in `modes.js`, and the generator to `EDITABLE`, plus a UI pass (hexagon ghost layout). `classes.js` already runs on every generator.
+- [ ] More square modes if wanted: rows of alternating shapes, shapes by column, four shapes, half-turn modes, glides.
+- [ ] The Orientation setting (Generate tab) is ignored while a shape applies; consider disabling it then, or deriving it from the mode.
+- [ ] Switching mode keeps the edits (so the same curves reappear in the new tiling); consider keeping a shape per mode instead, and an "outline crosses itself" warning for edits that stop being valid after a switch.
+- [ ] Shape in the URL hash: a refresh currently drops the shape unless the project was saved. Needs a compact encoding (e.g. `sh=sq/e0/0.3,0.2,0.7,-0.1;...`, rounded to 4 decimals); decide first whether the hash should grow that long.
+- [ ] Shape view polish: touch/keyboard way to remove a point (double-click only today), zoom, snapping/grid, per-edge reset, numeric entry.
+- [ ] Curved edge paths: the renderer supports only `M`/`L`/`Z` (`pathD` in `render/svg.js`), and `core/path.js` throws on anything else. Add `C` with reversal that swaps control points, then smooth handles.
+- [ ] Mirrored glues (hat/reflection tilings): `classes.js` locks them; supporting them needs reflection-aware parity and symmetric (mirror) constraints.
+- [ ] Non-edge-to-edge tilings (row shift, Archimedean, Penrose): classes lock unmatched edges. Brick bond still lets the vertical edges be edited (the `canEdit` gate says otherwise).
+- [ ] `pair` metadata is now only a cross-check for `classes.js`; decide whether to keep requiring it from new generators.
 
 ## App / UX
 - [ ] Pan and zoom in the preview (region is currently fixed to the canvas size). Needs a decision on whether export follows the viewport.

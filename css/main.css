@@ -11,3 +11,24 @@ legend { font-weight: 600; }
 .field input[type=number] { width: 80px; }
 .buttons { display: flex; flex-wrap: wrap; gap: var(--gap); margin-top: var(--gap); }
 button { padding: 6px 10px; cursor: pointer; }
+[hidden] { display: none !important; }
+.tabs { display: flex; margin: 0 0 var(--gap); }
+.tabs button { flex: 1; border-radius: 0; }
+.tabs button[aria-pressed=true] { font-weight: 600; background: Highlight; color: HighlightText; }
+body.shaping { --side: 460px; }
+.hint { margin: 4px 0; }
+.hint.warn { color: #b45309; }
+.editor-host { margin: var(--gap) 0; }
+.tile-editor { width: 100%; height: auto; touch-action: none; user-select: none; }
+.tile-editor path, .tile-editor circle { vector-effect: non-scaling-stroke; }
+.tile-editor .ghosts path { fill: #8881; stroke: #8886; }
+.tile-editor .tile { fill: #2563eb22; stroke: currentColor; stroke-width: 1.5px; }
+.tile-editor .base { fill: none; stroke: #8887; stroke-dasharray: 4 3; }
+.tile-editor .edge { fill: none; stroke: #2563eb; stroke-width: 2.5px; }
+.tile-editor .edge.derived { stroke-dasharray: 6 4; stroke-width: 2px; }
+.tile-editor .hit { fill: none; stroke: transparent; stroke-width: 16px; cursor: copy; }
+.tile-editor .handle { fill: Canvas; stroke: #2563eb; stroke-width: 2px; cursor: grab; }
+.tile-editor .derived-pt { fill: none; stroke: #2563eb; stroke-width: 1.5px; }
+.tile-editor.invalid .tile { stroke: #dc2626; fill: #dc262633; }
+.tile-tabs { display: flex; gap: 4px; margin: var(--gap) 0 0; }
+.tile-tabs button[aria-pressed=true] { font-weight: 600; background: Highlight; color: HighlightText; }

@@ -14,11 +14,18 @@
       <button id="redo" disabled>Redo</button>
       <button id="link">Copy link</button>
     </div>
-    <label class="field">Generator <select id="generator"></select></label>
-    <label class="field">Preset <select id="preset"></select></label>
-    <div id="controls-gen"></div>
-    <div id="controls-style"></div>
-    <div id="controls-view"></div>
+    <div class="tabs">
+      <button id="tab-gen" aria-pressed="true">Generate</button>
+      <button id="tab-shape" aria-pressed="false">Shape</button>
+    </div>
+    <div id="pane-gen">
+      <label class="field">Generator <select id="generator"></select></label>
+      <label class="field">Preset <select id="preset"></select></label>
+      <div id="controls-gen"></div>
+      <div id="controls-style"></div>
+      <div id="controls-view"></div>
+    </div>
+    <div id="pane-shape" hidden></div>
     <div class="buttons">
       <button id="download">Download SVG</button>
       <button id="copy">Copy SVG</button>

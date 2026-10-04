@@ -50,3 +50,23 @@ test('undo/redo on empty history are no-ops', () => {
   assert.equal(s.redo(), false);
   assert.deepEqual(s.get(), { n: 0 });
 });
+
+test('{ merge: true } joins the previous step however long ago; it still opens a step when there is nothing to join', () => {
+  const { s, clock } = make();
+  s.set({ n: 1 }, { merge: true }); // nothing to join yet: opens a step
+  clock.t = 5000; s.set({ n: 2 }, { merge: true }); clock.t = 90000; s.set({ n: 3 }, { merge: true });
+  assert.ok(s.undo());
+  assert.equal(s.get().n, 0);
+  assert.ok(!s.canUndo());
+  s.redo();
+  clock.t = 100000; s.set({ n: 7 }, { merge: true }); // first edit after undo/redo opens a new step
+  s.undo(); assert.equal(s.get().n, 3);
+});
+
+test('a drag is one undo step: first change { step }, the rest { merge }', () => {
+  const { s, clock } = make();
+  s.set({ n: 1 }); clock.t = 10000;
+  s.set({ n: 2 }, { step: true });
+  for (let i = 3; i <= 9; i++) { clock.t += 2000; s.set({ n: i }, { merge: true }); }
+  s.undo(); assert.equal(s.get().n, 1);
+});
