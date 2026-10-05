@@ -38,3 +38,4 @@ body.shaping { --side: 460px; }
 .tile-editor.invalid .tile { stroke: #dc2626; fill: #dc262633; }
 .tile-tabs { display: flex; gap: 4px; margin: var(--gap) 0 0; }
 .tile-tabs button[aria-pressed=true] { font-weight: 600; background: Highlight; color: HighlightText; }
+.mode-fields { margin: var(--gap) 0; padding: 4px 0; border-bottom: 1px solid #8884; }

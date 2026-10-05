@@ -58,7 +58,7 @@ import { edgeClasses, slotKey } from './classes.js';
 import { DEFAULT_MODE, retile } from './modes.js';
 
 /** Generators whose edge classes the editor handles (the machinery itself is generic). */
-export const EDITABLE = ['square'];
+export const EDITABLE = ['square', 'triangle'];
 export const LIMITS = { t: [-2, 3], n: [-2, 2], points: 64 };
 /** Segment commands an edited edge may use (after its leading M); each must exist in core/path.js COMMANDS. */
 export const SHAPE_COMMANDS = ['L', 'C'];

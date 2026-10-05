@@ -14,8 +14,12 @@
  *   differing parity -> the curve must equal its own reverse under S = inverse(X1) * X2, which is only possible for
  *                   a half-turn about the edge midpoint: the class is `symmetric` (the curve is point-symmetric);
  *                   any other S locks the class.
- * Also locked: a mirrored glue (not supported yet), and an interior edge with no glued neighbour (the tiling is not
- * edge-to-edge, e.g. a row shift or a twist).
+ * Mirrored tiles (negative determinant: a flipped tile) are supported. Two tiles of the same handedness walk their
+ * shared edge in opposite world directions and a mirrored one with a proper one in the SAME direction, so a mirrored
+ * glue does not reverse the curve (the parity above counts only the reversing glues). Where a route comes back to an
+ * edge with differing parity through a mirror across the perpendicular through the edge's middle, the curve would have to
+ * be mirror-symmetric (a bump); that is not supported yet and the class is `locked`. Also locked: an interior edge
+ * with no glued neighbour (the tiling is not edge-to-edge, e.g. a row shift or a twist).
  *
  * edgeClasses(ir) -> Class[]   ordered by representative
  *   Class = { rep: {proto, edge}, kind: 'free'|'symmetric'|'locked', reason?: string,
@@ -58,17 +62,20 @@ export function edgeClasses(ir) {
   }));
 
   // glue relations between slots, and slots that have an interior edge with no neighbour
-  const relations = new Map(), unmatched = new Set(), reflected = new Set();
+  const mirrored = ir.tiles.map((t) => det(t.transform) < 0), relations = new Map(), unmatched = new Set();
   for (const a of entries) {
     const ci = Math.floor(a.mid[0] / cell), cj = Math.floor(a.mid[1] / cell);
     for (let di = -1; di <= 1; di++) for (let dj = -1; dj <= 1; dj++) {
       for (const o of grid.get(cellKey(ci + di, cj + dj)) ?? []) {
-        if (o.ti === a.ti || dist(a.s, o.f) > eps || dist(a.f, o.s) > eps) continue;
+        if (o.ti === a.ti) continue;
+        // two tiles of the same handedness walk their shared edge in opposite world directions, a mirrored one and a
+        // proper one in the same direction
+        const flipped = mirrored[a.ti] !== mirrored[o.ti];
+        if (flipped ? dist(a.s, o.s) > eps || dist(a.f, o.f) > eps : dist(a.s, o.f) > eps || dist(a.f, o.s) > eps) continue;
         a.matched = true;
         const T = multiply(invert(ir.tiles[o.ti].transform), ir.tiles[a.ti].transform);
-        if (det(T) <= 0) reflected.add(a.slot);
         if (!relations.has(a.slot)) relations.set(a.slot, []);
-        relations.get(a.slot).push({ to: o.slot, T });
+        relations.get(a.slot).push({ to: o.slot, T, reverses: !flipped });
       }
     }
   }
@@ -78,27 +85,27 @@ export function edgeClasses(ir) {
   const seen = new Set(), classes = [];
   for (const root of slots) {
     if (seen.has(root)) continue;
-    const info = new Map([[root, { X: [1, 0, 0, 1, 0, 0], depth: 0 }]]), queue = [root], problems = [];
+    const info = new Map([[root, { X: [1, 0, 0, 1, 0, 0], rev: false }]]), queue = [root], problems = [];
     let symmetric = false;
     seen.add(root);
     const [A, B] = ends.get(root);
     for (let qi = 0; qi < queue.length; qi++) {
       const a = queue[qi], ia = info.get(a);
       if (unmatched.has(a)) problems.push('an edge of this class meets no matching neighbour (the tiling is not edge-to-edge)');
-      if (reflected.has(a)) problems.push('mirrored neighbours are not supported yet');
-      for (const { to, T } of relations.get(a) ?? []) {
-        const X2 = multiply(T, ia.X), depth2 = ia.depth + 1, known = info.get(to);
-        if (!known) { info.set(to, { X: X2, depth: depth2 }); seen.add(to); queue.push(to); continue; }
-        const S = multiply(invert(known.X), X2);
-        if ((known.depth - depth2) % 2 === 0) {
+      for (const { to, T, reverses } of relations.get(a) ?? []) {
+        const X2 = multiply(T, ia.X), rev2 = ia.rev !== reverses, known = info.get(to);
+        if (!known) { info.set(to, { X: X2, rev: rev2 }); seen.add(to); queue.push(to); continue; }
+        const S = multiply(invert(known.X), X2), swaps = dist(apply(S, A), B) <= eps && dist(apply(S, B), A) <= eps;
+        if (known.rev === rev2) {
           if (!sameMap(S, [1, 0, 0, 1, 0, 0], eps)) problems.push('the neighbours around this edge disagree about its shape');
-        } else if (det(S) > 0 && dist(apply(S, A), B) <= eps && dist(apply(S, B), A) <= eps) symmetric = true;
-        else problems.push('this edge would have to match itself under a turn that is not a half-turn about its middle');
+        } else if (swaps && det(S) > 0) symmetric = true;
+        else if (swaps) problems.push('this edge would have to be mirror-symmetric about its middle (not supported yet)');
+        else problems.push('this edge would have to match itself under a map that is not a half-turn about its middle');
       }
     }
     const [proto, edge] = root.split('/');
     const members = [...info].sort((x, y) => orderOf.get(x[0]) - orderOf.get(y[0]))
-      .map(([k, { X, depth }]) => { const [p, e] = k.split('/'); return { proto: p, edge: e, transform: X, reversed: depth % 2 === 1 }; });
+      .map(([k, { X, rev }]) => { const [p, e] = k.split('/'); return { proto: p, edge: e, transform: X, reversed: rev }; });
     classes.push({ rep: { proto, edge }, kind: problems.length ? 'locked' : symmetric ? 'symmetric' : 'free', ...(problems.length && { reason: problems[0] }), members });
   }
   return classes;

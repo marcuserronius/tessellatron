@@ -5,7 +5,7 @@
  *     setShape(shape, opts): store.set({ shape }, opts)  (opts = { step } or { merge }, see app/store.js)
  *     setParams(patch, opts): merge a param patch into state.params (used by "Make tiling editable")
  *   update() re-renders from the state; call it after any store change while the tab is visible.
- * The tiling mode (editor/modes.js) says how many tile shapes there are and which tiles are turned; the line under it
+ * The tiling mode (editor/modes.js) says how many tile shapes there are and which tiles are turned or flipped; the Shape tab offers it as two selects, "Tile shapes" (1, 2, 3) and "Tiles are" (the variant: turned / flipped), which together pick a mode; the line under it
  * lists which edges are the same curve (derived from the tiling, so it is always true). Which edges can be edited, and
  * which follow them, comes from the edge classes (editor/classes.js). The tile selector (A, B, ...) picks which shape is
  * shown, and an edge shared with a neighbouring tile changes both.
@@ -30,14 +30,14 @@ import { apply, invert } from '../core/affine.js';
 import { slotKey } from '../editor/classes.js';
 import { canEdit, editableParams, edgeFrame, fromLocal, crossingProblems, shapeNotes, EDITABLE } from '../editor/shape.js';
 import { clampPoint, cornerNode, edgeValue, insertPoint, movePoint, nearestOnEdge, nodeAt, nodeCount, pointsOf, removePoint, setHandle, smoothNode, withMode } from '../editor/edit.js';
-import { DEFAULT_MODE, describeEdges, modesOf } from '../editor/modes.js';
+import { DEFAULT_MODE, describeEdges, modeFor, modesOf, shapeCounts, variantsOf } from '../editor/modes.js';
 import { tileChoices, tileEditorSVG } from './tile-editor-svg.js';
 
 export function mountShapeView(root, { getState, setShape, setParams }) {
-  root.innerHTML = '<label class="field" hidden>Tiling <select data-act="mode"></select></label><p class="hint relations" hidden></p><p class="hint"></p><p class="hint note" hidden></p><div class="tile-tabs" hidden></div><div class="buttons"><button data-act="fix" hidden>Make tiling editable</button></div>'
+  root.innerHTML = '<div class="mode-fields" hidden><label class="field">Tile shapes <select data-act="shapes"></select></label><label class="field">Tiles are <select data-act="variant"></select></label></div><p class="hint relations" hidden></p><p class="hint"></p><p class="hint note" hidden></p><div class="tile-tabs" hidden></div><div class="buttons"><button data-act="fix" hidden>Make tiling editable</button></div>'
     + '<div class="editor-host"></div><div class="buttons node-tools" hidden><button data-act="smooth">Smooth</button><button data-act="corner">Corner</button><button data-act="delete">Delete node</button><label class="toggle"><input type="checkbox" data-act="solo"> Move handles one at a time</label></div>'
     + '<div class="buttons"><button data-act="reset">Reset shape</button></div>';
-  const hint = root.querySelector('.hint:not(.note):not(.relations)'), relations = root.querySelector('.relations'), modeField = root.querySelector('.field'), modeSelect = root.querySelector('[data-act=mode]'), note = root.querySelector('.note'), tabs = root.querySelector('.tile-tabs'), host = root.querySelector('.editor-host');
+  const hint = root.querySelector('.hint:not(.note):not(.relations)'), relations = root.querySelector('.relations'), modeField = root.querySelector('.mode-fields'), shapesSelect = root.querySelector('[data-act=shapes]'), variantSelect = root.querySelector('[data-act=variant]'), note = root.querySelector('.note'), tabs = root.querySelector('.tile-tabs'), host = root.querySelector('.editor-host');
   const fix = root.querySelector('[data-act=fix]'), reset = root.querySelector('[data-act=reset]'), tools = root.querySelector('.node-tools');
   const smoothBtn = tools.querySelector('[data-act=smooth]'), cornerBtn = tools.querySelector('[data-act=corner]'), deleteBtn = tools.querySelector('[data-act=delete]'), solo = tools.querySelector('[data-act=solo]');
   let ctx = null, drag = null, last = '', invalid = false, selected = null, tabsHTML = '', modesHTML = '', sel = null;
@@ -84,9 +84,15 @@ export function mountShapeView(root, { getState, setShape, setParams }) {
     }
     ctx = { sample, classes, slots };
     const modes = modesOf(st.generator), current0 = current(), modeNow = current0?.mode ?? DEFAULT_MODE;
-    const mhtml = modes.map((m) => `<option value="${m.id}">${m.label}</option>`).join('');
-    if (mhtml !== modesHTML) { modeSelect.innerHTML = modesHTML = mhtml; }
-    modeSelect.value = modeNow;
+    const counts = shapeCounts(st.generator), variants = variantsOf(st.generator), now = modes.find((m) => m.id === modeNow) ?? modes[0];
+    const mhtml = counts.map((n) => `<option value="${n}">${n === 1 ? 'One shape' : n === 2 ? 'Two shapes' : n === 3 ? 'Three shapes' : `${n} shapes`}</option>`).join('')
+      + '|' + variants.map(([id, label]) => `<option value="${id}">${label}</option>`).join('');
+    if (mhtml !== modesHTML) {
+      [shapesSelect.innerHTML, variantSelect.innerHTML] = (modesHTML = mhtml).split('|');
+    }
+    shapesSelect.value = String(now?.shapes ?? 1);
+    variantSelect.value = now?.variant ?? '';
+    variantSelect.parentElement.hidden = variants.length < 2;
     modeField.hidden = modes.length < 2;
     relations.hidden = false;
     relations.textContent = describeEdges(sample, classes, st.generator).join(' · ');
@@ -167,7 +173,12 @@ export function mountShapeView(root, { getState, setShape, setParams }) {
     else if (e.key === 'Escape') { sel = null; update(); }
   });
 
-  modeSelect.addEventListener('change', () => setShape(withMode(current(), getState().generator, modeSelect.value), { step: true }));
+  const chooseMode = () => {
+    const gen = getState().generator, id = modeFor(gen, Number(shapesSelect.value), variantSelect.value);
+    if (id) setShape(withMode(current(), gen, id), { step: true });
+  };
+  shapesSelect.addEventListener('change', chooseMode);
+  variantSelect.addEventListener('change', chooseMode);
   tabs.addEventListener('click', (e) => {
     const b = e.target.closest?.('[data-tile]');
     if (b) { selected = b.dataset.tile; last = ''; update(); }

@@ -248,15 +248,14 @@ test('the same edits mean different tilings in different modes', () => {
   assert.deepEqual(lens(turned, 'sq'), [3, 2, 2, 3]); // top and left
 });
 
-test('one shared shape for tiles in several orientations: a half-turn symmetric edge (a tiling with no modes, flattened)', () => {
+test('one shared shape for tiles in several orientations: a half-turn symmetric edge (triangles, mode single)', () => {
   const tri = triangle.generate({ ...defaults(triangle.params), size: 100 }, [-300, -300, 300, 300]);
-  const one = { ...tri, tiles: tri.tiles.map((t) => ({ ...t, orient: { rot: 0, flip: false } })) };
-  const s = { generator: 'triangle', edges: { tri: { e0: [[0.2, 0.25], [0.35, -0.1]] } } }, shaped = applyShape(one, s);
+  const s = { generator: 'triangle', edges: { tri: { e0: [[0.2, 0.25], [0.35, -0.1]] } } }, shaped = applyShape(tri, s);
   const P = pathPoints(shaped.prototiles.tri.edges[0].path);
   assert.equal(P.length, 7); // start, two edited points, the middle, two mirrored points, end
   P.forEach((p, k) => { const q = P[P.length - 1 - k]; const m = [(P[0][0] + P.at(-1)[0]) / 2, (P[0][1] + P.at(-1)[1]) / 2]; assert.ok(close(p[0] + q[0], 2 * m[0]) && close(p[1] + q[1], 2 * m[1])); });
   assert.ok(fitReport(shaped).worst < 1e-9);
-  assert.deepEqual(shapeProblems(one, s), []);
+  assert.deepEqual(shapeProblems(tri, s), []);
 });
 
 test('shapeProblems under modes: edits keyed to a derived edge are named, a locked class refuses edits, crossings are caught for every tile', () => {
@@ -359,8 +358,7 @@ test('a cubic on the top edge becomes the matching cubic on the bottom edge (rev
 
 test('a symmetric edge stored as a half cubic is completed smoothly and point-symmetrically', () => {
   const tri = triangle.generate({ ...defaults(triangle.params), size: 100 }, [-300, -300, 300, 300]);
-  const one = { ...tri, tiles: tri.tiles.map((t) => ({ ...t, orient: { rot: 0, flip: false } })) };
-  const s = { generator: 'triangle', edges: { tri: { e0: [['M', 0, 0], ['C', 0.1, 0.3, 0.3, 0.3, 0.5, 0]] } } }, shaped = applyShape(one, s);
+  const s = { generator: 'triangle', edges: { tri: { e0: [['M', 0, 0], ['C', 0.1, 0.3, 0.3, 0.3, 0.5, 0]] } } }, shaped = applyShape(tri, s);
   const path = shaped.prototiles.tri.edges[0].path;
   assert.deepEqual(path.map((x) => x[0]), ['M', 'C', 'C']);
   const mid = path[1].slice(5), c2 = path[1].slice(3, 5), c1 = path[2].slice(1, 3);
